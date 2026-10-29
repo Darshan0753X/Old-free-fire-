@@ -2,22 +2,17 @@
 
 An original 3D classic-era (2018–2020) mobile battle royale and tactical arena game optimized for **Android 15 phones** and modern mobile browsers.
 
-## How to Play on Your Android 15 Phone via GitHub (No PC Required)
+---
 
-Once you export this project to GitHub from Google AI Studio:
+## How to Play on Your Android 15 Phone via GitHub (Takes 30 Seconds)
 
-### Option 1: Play via GitHub Pages (Automatic Cloud Build)
-This repository includes a pre-configured GitHub Actions workflow (`.github/workflows/deploy.yml`) that automatically builds and publishes the game for your phone:
-1. Open your newly exported repository on **GitHub.com** in Chrome on your Android 15 phone.
-2. Tap **Settings** (top tab bar) → scroll down and tap **Pages** in the left menu.
-3. Under **Build and deployment → Source**, select **GitHub Actions**.
-4. Wait ~60 seconds for the build action to finish, then open your live game link (`https://<your-username>.github.io/<repo-name>/`) on your Android 15 phone!
+When you export from Google AI Studio to GitHub, GitHub first shows you the **Commit / Code Changes page** (with red `-` and green `+` lines showing the files that were saved). **That screen is just the code view, not the live game player.**
 
-### Option 2: Install to Android 15 Home Screen (Fullscreen Landscape App)
-1. Open the hosted game URL in **Chrome on Android 15**.
-2. Tap the **Install App** button in the top bar of the game lobby (or tap Chrome's `⋮` menu → **Add to Home screen / Install app**).
-3. Launch **ClassicDrop** from your Android 15 home screen—it opens in full-screen landscape mode with offline caching and local save persistence!
+To open and play the actual 3D game on your Android 15 phone, follow these 4 taps on your GitHub page:
 
-### Option 3: One-Tap Deploy to Vercel or Netlify from Phone
-- **Vercel**: Sign in to `vercel.com` with GitHub on your phone → **Add New Project** → import this repository → tap **Deploy**.
-- **Netlify**: Sign in to `app.netlify.com` with GitHub on your phone → **Import from Git** → select this repository → tap **Deploy**.
+1. At the top of your GitHub repository page in Chrome, tap **Settings** (if you don't see it, tap the `...` icon or scroll the top tabs to the right).
+2. Scroll down the left menu and tap **Pages**.
+3. Under **Build and deployment → Source**:
+   - **Fastest (Instant)**: Keep **Deploy from a branch**, select **`main`** branch, change the folder from `/ (root)` to **`/docs`**, and tap **Save**.
+   - *(Or select **GitHub Actions** — both work automatically!)*
+4. Refresh the **Pages** screen after ~20 seconds and tap the **Visit site** button (`https://<your-username>.github.io/<repo-name>/`) to launch and play the 3D game in fullscreen landscape on your Android 15 phone!
