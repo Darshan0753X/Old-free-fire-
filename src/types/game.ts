@@ -164,19 +164,110 @@ export interface MatchHistoryRecord {
   xpEarned: number;
 }
 
+export type HUDControlId =
+  | 'joystick'
+  | 'aim'
+  | 'fire'
+  | 'jump'
+  | 'sprint'
+  | 'crouch'
+  | 'prone'
+  | 'reload'
+  | 'weapon_switch'
+  | 'heal'
+  | 'interact'
+  | 'inventory'
+  | 'minimap'
+  | 'cover';
+
+export interface HUDElementConfig {
+  id: HUDControlId;
+  label: string;
+  xPct: number; // 0..100 normalized viewport width percentage
+  yPct: number; // 0..100 normalized viewport height percentage
+  scale: number; // 0.65..1.65
+  opacity: number; // 0.25..1.0
+  visible: boolean;
+  essential?: boolean;
+}
+
+export type CrosshairStyle =
+  | 'classic_cross'
+  | 'dot_ring'
+  | 'chevron'
+  | 'precision_box';
+
+export type AIDifficulty = 'EASY' | 'NORMAL' | 'HARD';
+
+export type TacticalRole = 'Assault' | 'Support' | 'Scout' | 'Defender';
+
+export type VehicleType = 'rover' | 'sprinter' | 'moto';
+
+export interface VehicleHUDInfo {
+  id: string;
+  type: VehicleType;
+  name: string;
+  x: number;
+  z: number;
+  health: number;
+  maxHealth: number;
+  speedKmh: number;
+  disabled: boolean;
+}
+
+export interface CombatDamagePopup {
+  id: string;
+  value: number;
+  isShield: boolean;
+  isCritical: boolean;
+  screenX: number; // 0..100vw percentage
+  screenY: number; // 0..100vh percentage
+  createdAt: number;
+}
+
 export interface GameSettings {
+  // Graphics
   graphicsPreset: GraphicsPreset;
   shadowsEnabled: boolean;
+  renderResolutionScale: number;
+  environmentDetail: 'low' | 'medium' | 'high';
+  showFps: boolean;
+  // Audio
+  masterVolume: number;
   musicVolume: number;
   sfxVolume: number;
   ambientVolume: number;
   muted: boolean;
+  // Aiming & Camera Sensitivity
   cameraSensitivity: number;
-  movementSensitivity: number;
+  aimingSensitivity: number;
+  horizontalSensitivity: number;
+  verticalSensitivity: number;
   invertY: boolean;
+  aimBehavior: 'toggle' | 'hold';
+  aimAssist: boolean;
+  aimAssistStrength: number;
+  crosshairSize: number;
+  crosshairOpacity: number;
+  crosshairStyle: CrosshairStyle;
+  // Controls & HUD
+  movementSensitivity: number;
+  sprintBehavior: 'joystick_push' | 'button' | 'both';
   hudScale: number;
+  hudOpacity: number;
   controlLayout: 'standard' | 'compact' | 'wide';
-  showFps: boolean;
+  hudLayoutVersion: number;
+  hudLayout: Record<HUDControlId, HUDElementConfig>;
+  // Combat Feedback & Gameplay
+  hitMarkersEnabled: boolean;
+  damageNumbersEnabled: boolean;
+  cameraShake: 'off' | 'low' | 'high';
+  combatEffects: 'low' | 'medium' | 'high';
+  aiDifficulty: AIDifficulty;
+  cameraFov: number;
+  autoPickupInteract: boolean;
+  showAimDebug: boolean;
+  showAiDebug: boolean;
 }
 
 export interface PlayerProfileStats {
@@ -210,6 +301,7 @@ export interface SaveDataSchema {
 export interface SquadMemberHUD {
   id: string;
   name: string;
+  role: TacticalRole;
   isLeader: boolean;
   isPlayer: boolean;
   health: number;
@@ -261,6 +353,13 @@ export interface interfaceHUDStateSnapshot {
   reloadProgress: number;
   inVehicle: boolean;
   nearVehicle: boolean;
+  activeVehicle: VehicleHUDInfo | null;
+  nearbyVehicleName: string | null;
+  // Combat Feedback
+  hitMarkerActive: boolean;
+  hitMarkerIsElim: boolean;
+  takingDamageFlash: boolean;
+  damagePopups: CombatDamagePopup[];
   // Equipment & Inventory
   weapons: (EquipmentConfig | null)[];
   activeWeaponSlot: 0 | 1;
@@ -294,6 +393,7 @@ export interface interfaceHUDStateSnapshot {
     isAlly: boolean;
     isDowned: boolean;
   }[];
+  vehiclesOnMap: VehicleHUDInfo[];
   vehiclePos: { x: number; z: number } | null;
   squadMarker: { x: number; z: number } | null;
   // Squad
@@ -314,6 +414,16 @@ export interface interfaceHUDStateSnapshot {
   spectatingIndex: number;
   // Training
   training: TrainingTrialState;
+  // AI Debug
+  aiDebugEntries: {
+    id: string;
+    name: string;
+    role: TacticalRole;
+    state: AIState;
+    hp: number;
+    dist: number;
+    targetLabel: string;
+  }[];
   // Performance & feed
   fps: number;
   killFeed: { id: string; text: string; isPlayer: boolean }[];
@@ -342,7 +452,7 @@ export const EQUIPMENT_CATALOG: Record<string, EquipmentConfig> = {
     fireCooldown: 0.12,
     damage: 14,
     pellets: 1,
-    spread: 0.035,
+    spread: 0.012,
     burstCount: 1,
     handlingDifficulty: 'Easy',
     arenaCost: 400,
@@ -363,7 +473,7 @@ export const EQUIPMENT_CATALOG: Record<string, EquipmentConfig> = {
     fireCooldown: 0.24,
     damage: 21,
     pellets: 1,
-    spread: 0.018,
+    spread: 0.008,
     burstCount: 3,
     handlingDifficulty: 'Medium',
     arenaCost: 650,
@@ -384,7 +494,7 @@ export const EQUIPMENT_CATALOG: Record<string, EquipmentConfig> = {
     fireCooldown: 0.65,
     damage: 11,
     pellets: 6,
-    spread: 0.11,
+    spread: 0.075,
     burstCount: 1,
     handlingDifficulty: 'Easy',
     arenaCost: 600,
@@ -392,29 +502,29 @@ export const EQUIPMENT_CATALOG: Record<string, EquipmentConfig> = {
   },
   charged_arc: {
     id: 'charged_arc',
-    name: 'Charged Arc Launcher',
-    shortName: 'Arc Launcher',
+    name: 'Charged Arc Crossbow',
+    shortName: 'Arc Crossbow',
     category: 'Charged Arc Launcher',
     rarity: 'epic',
     color: '#A855F7',
     projectileColor: '#C084FC',
     effectiveRange: 105,
-    projectileSpeed: 64,
+    projectileSpeed: 74,
     energyCapacity: 12,
     reloadTime: 2.3,
     fireCooldown: 0.48,
     damage: 36,
     pellets: 1,
-    spread: 0.015,
+    spread: 0.003,
     burstCount: 1,
     handlingDifficulty: 'Medium',
     arenaCost: 900,
-    description: 'Launches heavy ionized arc orbs that disrupt shields on impact.',
+    description: 'Launches heavy ionized arc bolts that disrupt shields on impact.',
   },
   precision_caster: {
     id: 'precision_caster',
-    name: 'Precision Energy Caster',
-    shortName: 'Ion Lance',
+    name: 'Precision Energy Crossbow',
+    shortName: 'Energy Crossbow',
     category: 'Precision Energy Caster',
     rarity: 'legendary',
     color: '#F59E0B',
@@ -426,11 +536,11 @@ export const EQUIPMENT_CATALOG: Record<string, EquipmentConfig> = {
     fireCooldown: 0.82,
     damage: 58,
     pellets: 1,
-    spread: 0.004,
+    spread: 0.0,
     burstCount: 1,
     handlingDifficulty: 'Skilled',
     arenaCost: 1100,
-    description: 'Long-range hyper-velocity energy lance designed for ridge overwatch.',
+    description: 'Long-range hyper-velocity energy crossbow designed for precision overwatch.',
   },
 };
 

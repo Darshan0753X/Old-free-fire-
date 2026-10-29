@@ -32,10 +32,12 @@ class SoundController {
   }
 
   public applySettings(settings: GameSettings) {
-    this.musicVolume = settings.musicVolume;
-    this.sfxVolume = settings.sfxVolume;
-    this.ambientVolume = settings.ambientVolume;
-    this.muted = settings.muted;
+    const master =
+      typeof settings.masterVolume === 'number' ? settings.masterVolume : 1.0;
+    this.musicVolume = settings.musicVolume * master;
+    this.sfxVolume = settings.sfxVolume * master;
+    this.ambientVolume = settings.ambientVolume * master;
+    this.muted = settings.muted || master <= 0;
     if (this.muted && this.musicInterval) {
       this.stopMenuMusic();
     }
@@ -220,6 +222,145 @@ class SoundController {
       gain.connect(ctx.destination);
       osc.start(now);
       osc.stop(now + 0.34);
+    } catch {
+      // ignore
+    }
+  }
+
+  public unlockAudio() {
+    this.ensureContext();
+  }
+
+  public playReload() {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      [320, 480, 690].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+        gain.gain.setValueAtTime(0.16 * this.sfxVolume, now + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.09);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.1);
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  public playJump() {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(340, now + 0.11);
+      gain.gain.setValueAtTime(0.14 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.13);
+    } catch {
+      // ignore
+    }
+  }
+
+  public playLand() {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(115, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.09);
+      gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.11);
+    } catch {
+      // ignore
+    }
+  }
+
+  public playTakingDamage() {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(190, now);
+      osc.frequency.exponentialRampToValueAtTime(75, now + 0.12);
+      gain.gain.setValueAtTime(0.22 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch {
+      // ignore
+    }
+  }
+
+  public playSurfaceImpact(surface: 'flesh' | 'shield' | 'wall') {
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = surface === 'shield' ? 'sine' : 'triangle';
+      const startFreq =
+        surface === 'shield' ? 920 : surface === 'flesh' ? 320 : 210;
+      const endFreq =
+        surface === 'shield' ? 540 : surface === 'flesh' ? 120 : 85;
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.06);
+      gain.gain.setValueAtTime(0.14 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.07);
+    } catch {
+      // ignore
+    }
+  }
+
+  public playVehicleEnginePulse(speedRatio: number) {
+    const nowMs = performance.now();
+    if (nowMs - this.lastFootstepTime < 140) return;
+    this.lastFootstepTime = nowMs;
+
+    const ctx = this.ensureContext();
+    if (!ctx || this.sfxVolume <= 0) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const freq = 58 + Math.min(1.2, Math.abs(speedRatio)) * 95;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.065 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
     } catch {
       // ignore
     }

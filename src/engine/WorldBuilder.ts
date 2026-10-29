@@ -664,7 +664,7 @@ function buildSunsetIsland(
       });
     }
 
-    // Special dock pier for Old Harbor
+    // Special dock pier & container yard for Old Harbor
     if (reg.id === 'old_harbor') {
       const pier = new THREE.Mesh(
         new THREE.BoxGeometry(6, 0.5, 28),
@@ -679,7 +679,94 @@ function buildSunsetIsland(
         maxZ: reg.z + 38,
         heightAt: () => 0.85,
       });
+
+      // Shipping containers in Old Harbor warehouse district
+      for (const [cxOff, czOff, colHex] of [
+        [-2, 16, '#0284C7'],
+        [6, 18, '#EA580C'],
+      ] as [number, number, string][]) {
+        const cy = groundHeightAt(reg.x + cxOff, reg.z + czOff, 'br_solo');
+        const cont = new THREE.Mesh(
+          new THREE.BoxGeometry(3.6, 2.8, 7.5),
+          new THREE.MeshStandardMaterial({ color: colHex, roughness: 0.6 })
+        );
+        cont.position.set(reg.x + cxOff, cy + 1.4, reg.z + czOff);
+        cont.castShadow = true;
+        worldGroup.add(cont);
+        colliders.push({
+          id: `harbor_cont_${cxOff}`,
+          minX: reg.x + cxOff - 1.8,
+          maxX: reg.x + cxOff + 1.8,
+          minY: cy,
+          maxY: cy + 2.8,
+          minZ: reg.z + czOff - 3.75,
+          maxZ: reg.z + czOff + 3.75,
+          blocksProjectiles: true,
+        });
+      }
     }
+
+    // Military Training Compound Watchtower & Barricades in Dustyard & Forgotten Depot
+    if (reg.id === 'dustyard' || reg.id === 'forgotten_depot') {
+      const tx = reg.x;
+      const tz = reg.z - 16;
+      const ty = groundHeightAt(tx, tz, 'br_solo');
+      const towerDeck = new THREE.Mesh(
+        new THREE.BoxGeometry(5.2, 0.35, 5.2),
+        new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.7 })
+      );
+      towerDeck.position.set(tx, ty + 4.2, tz);
+      worldGroup.add(towerDeck);
+      walkableSurfaces.push({
+        minX: tx - 2.6,
+        maxX: tx + 2.6,
+        minZ: tz - 2.6,
+        maxZ: tz + 2.6,
+        heightAt: () => ty + 4.38,
+      });
+    }
+
+    // Riverside Bridge Landmark near Riverside Market (-48, 42)
+    if (reg.id === 'riverside_market') {
+      const bx = reg.x + 18;
+      const bz = reg.z - 12;
+      const by = groundHeightAt(bx, bz, 'br_solo');
+      const bridgeDeck = new THREE.Mesh(
+        new THREE.BoxGeometry(7, 0.45, 22),
+        new THREE.MeshStandardMaterial({ color: '#92400E', roughness: 0.8 })
+      );
+      bridgeDeck.position.set(bx, by + 0.65, bz);
+      worldGroup.add(bridgeDeck);
+      walkableSurfaces.push({
+        minX: bx - 3.5,
+        maxX: bx + 3.5,
+        minZ: bz - 11,
+        maxZ: bz + 11,
+        heightAt: () => by + 0.88,
+      });
+    }
+
+    // Add tactical low cover walls in each region courtyard for AI & player firefights
+    const covX = reg.x + 1;
+    const covZ = reg.z - 2;
+    const covY = groundHeightAt(covX, covZ, 'br_solo');
+    const lowWall = new THREE.Mesh(
+      new THREE.BoxGeometry(4.2, 1.35, 0.55),
+      new THREE.MeshStandardMaterial({ color: '#64748B', roughness: 0.8 })
+    );
+    lowWall.position.set(covX, covY + 0.68, covZ);
+    lowWall.castShadow = true;
+    worldGroup.add(lowWall);
+    colliders.push({
+      id: `${reg.id}_courtyard_cover`,
+      minX: covX - 2.1,
+      maxX: covX + 2.1,
+      minY: covY,
+      maxY: covY + 1.35,
+      minZ: covZ - 0.28,
+      maxZ: covZ + 0.28,
+      blocksProjectiles: true,
+    });
   });
 
   // 4. Instanced Palm Trees & Rocks across Sunset Island

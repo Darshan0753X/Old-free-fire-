@@ -18,9 +18,12 @@ export interface ArticulatedCharacterRig {
   leftLegPivot: THREE.Group;
   rightLegPivot: THREE.Group;
   weaponMesh: THREE.Group;
+  muzzleNode: THREE.Object3D;
   gliderGroup: THREE.Group;
   downedRing: THREE.Mesh;
   hitFlashTimer: number;
+  recoilTimer: number;
+  reloadAnimTimer: number;
 }
 
 export function createArticulatedCharacter(
@@ -214,20 +217,79 @@ export function createArticulatedCharacter(
   rightHand.position.set(0, -0.54, 0);
   rightArmPivot.add(rightHand);
 
-  // Held Fictional Projector Weapon
+  // Held 3D Energy Crossbow / Tactical Projector (Local +Z is forward firing axis)
   const weaponMesh = new THREE.Group();
-  weaponMesh.position.set(0, -0.48, 0.26);
+  weaponMesh.position.set(0, -0.54, 0.06);
+  weaponMesh.rotation.x = Math.PI / 2;
+
+  // Crossbow main body rail along local +Z
   const gunBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.14, 0.52),
+    new THREE.BoxGeometry(0.09, 0.13, 0.56),
     secondaryMat
   );
+  gunBody.position.set(0, 0, 0.18);
+
+  // Glowing top energy track
   const gunBarrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.035, 0.035, 0.32, 8),
+    new THREE.CylinderGeometry(0.028, 0.028, 0.44, 8),
     accentMat
   );
   gunBarrel.rotation.x = Math.PI / 2;
-  gunBarrel.position.set(0, 0.02, 0.32);
-  weaponMesh.add(gunBody, gunBarrel);
+  gunBarrel.position.set(0, 0.055, 0.24);
+
+  // Crossbow horizontal bow limbs (prod) at front
+  const bowLimbLeft = new THREE.Mesh(
+    new THREE.BoxGeometry(0.26, 0.035, 0.055),
+    primaryMat
+  );
+  bowLimbLeft.position.set(0.14, 0.04, 0.36);
+  bowLimbLeft.rotation.y = 0.24;
+
+  const bowLimbRight = new THREE.Mesh(
+    new THREE.BoxGeometry(0.26, 0.035, 0.055),
+    primaryMat
+  );
+  bowLimbRight.position.set(-0.14, 0.04, 0.36);
+  bowLimbRight.rotation.y = -0.24;
+
+  // Glowing energy bowstring
+  const bowStringLeft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.008, 0.008, 0.25, 6),
+    accentMat
+  );
+  bowStringLeft.rotation.z = Math.PI / 2;
+  bowStringLeft.rotation.y = -0.55;
+  bowStringLeft.position.set(0.12, 0.045, 0.24);
+
+  const bowStringRight = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.008, 0.008, 0.25, 6),
+    accentMat
+  );
+  bowStringRight.rotation.z = Math.PI / 2;
+  bowStringRight.rotation.y = 0.55;
+  bowStringRight.position.set(-0.12, 0.045, 0.24);
+
+  // Top optical sight
+  const sightMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.045, 0.065, 0.12),
+    primaryMat
+  );
+  sightMesh.position.set(0, 0.1, 0.1);
+
+  // Exact world-space firing origin at the front tip of the crossbow (+Z)
+  const muzzleNode = new THREE.Object3D();
+  muzzleNode.position.set(0, 0.055, 0.5);
+
+  weaponMesh.add(
+    gunBody,
+    gunBarrel,
+    bowLimbLeft,
+    bowLimbRight,
+    bowStringLeft,
+    bowStringRight,
+    sightMesh,
+    muzzleNode
+  );
   rightArmPivot.add(weaponMesh);
 
   // 5. Left & Right Legs + Shoes
@@ -319,9 +381,12 @@ export function createArticulatedCharacter(
     leftLegPivot,
     rightLegPivot,
     weaponMesh,
+    muzzleNode,
     gliderGroup,
     downedRing,
     hitFlashTimer: 0,
+    recoilTimer: 0,
+    reloadAnimTimer: 0,
   };
 }
 
@@ -335,8 +400,22 @@ export function updateCharacterAnimation(
   rig.gliderGroup.visible = stance === 'parachuting';
   rig.downedRing.visible = stance === 'downed';
 
+  const torsoMat = rig.torsoMesh.material as THREE.MeshStandardMaterial;
   if (rig.hitFlashTimer > 0) {
     rig.hitFlashTimer = Math.max(0, rig.hitFlashTimer - dt);
+    if (torsoMat && torsoMat.emissive) {
+      torsoMat.emissive.setHex(0xff3b30);
+      torsoMat.emissiveIntensity = 0.65;
+    }
+  } else if (torsoMat && torsoMat.emissive && torsoMat.emissiveIntensity > 0) {
+    torsoMat.emissiveIntensity = 0;
+  }
+
+  if (rig.recoilTimer > 0) {
+    rig.recoilTimer = Math.max(0, rig.recoilTimer - dt);
+  }
+  if (rig.reloadAnimTimer > 0) {
+    rig.reloadAnimTimer = Math.max(0, rig.reloadAnimTimer - dt);
   }
 
   // Stance vertical & pitch adjustments
@@ -355,6 +434,10 @@ export function updateCharacterAnimation(
     targetBodyPitch = 0.45;
   } else if (stance === 'driving') {
     targetBodyY = -0.35;
+  }
+
+  if (rig.hitFlashTimer > 0) {
+    targetBodyPitch -= 0.12;
   }
 
   rig.bodyGroup.position.y = THREE.MathUtils.damp(
@@ -380,7 +463,7 @@ export function updateCharacterAnimation(
   let lLegX = 0;
   let rLegX = 0;
   let lArmX = 0;
-  let rArmX = -0.45;
+  let rArmX = -0.65;
   let lArmZ = 0;
   let rArmZ = 0;
 
@@ -396,22 +479,22 @@ export function updateCharacterAnimation(
     lLegX = Math.sin(elapsedTime * freq) * amp;
     rLegX = -Math.sin(elapsedTime * freq) * amp;
     lArmX = -Math.sin(elapsedTime * freq) * (amp * 0.75);
-    rArmX = -0.75 + Math.sin(elapsedTime * freq) * 0.25;
+    rArmX = -1.05 + Math.sin(elapsedTime * freq) * 0.2;
   } else if (animState === 'walking' || animState === 'crouching') {
     const freq = 6.5;
     const amp = 0.36;
     lLegX = Math.sin(elapsedTime * freq) * amp;
     rLegX = -Math.sin(elapsedTime * freq) * amp;
     lArmX = -Math.sin(elapsedTime * freq) * 0.28;
-    rArmX = -0.65;
+    rArmX = -1.15;
   } else if (animState === 'jumping' || animState === 'landing') {
     lLegX = -0.42;
     rLegX = 0.32;
     lArmX = -0.85;
-    rArmX = -0.95;
+    rArmX = -1.25;
   } else if (animState === 'aiming' || animState === 'using_equipment') {
-    rArmX = -1.42;
-    lArmX = -1.25;
+    rArmX = -Math.PI / 2;
+    lArmX = -1.35;
   } else if (animState === 'victory') {
     lArmX = -2.7 + Math.sin(elapsedTime * 6) * 0.25;
     rArmX = -2.7 - Math.sin(elapsedTime * 6) * 0.25;
@@ -424,7 +507,20 @@ export function updateCharacterAnimation(
     // Idle breathing
     const breath = Math.sin(elapsedTime * 2.4) * 0.04;
     lArmX = breath;
-    rArmX = -0.45 + breath;
+    rArmX = -0.85 + breath;
+  }
+
+  // Apply reload procedural arm motion
+  if (rig.reloadAnimTimer > 0) {
+    rArmX = -1.1 + Math.sin(elapsedTime * 10) * 0.15;
+    lArmX = -1.35 + Math.cos(elapsedTime * 12) * 0.28;
+    lArmZ = -0.28;
+  }
+
+  // Apply firing recoil kick
+  if (rig.recoilTimer > 0) {
+    const kick = (rig.recoilTimer / 0.14) * 0.22;
+    rArmX -= kick;
   }
 
   rig.leftLegPivot.rotation.x = THREE.MathUtils.damp(
@@ -448,7 +544,7 @@ export function updateCharacterAnimation(
   rig.rightArmPivot.rotation.x = THREE.MathUtils.damp(
     rig.rightArmPivot.rotation.x,
     rArmX,
-    14,
+    18,
     dt
   );
   rig.leftArmPivot.rotation.z = THREE.MathUtils.damp(
@@ -463,6 +559,106 @@ export function updateCharacterAnimation(
     12,
     dt
   );
+
+  // Keep weaponMesh default orientation compensated for rightArmPivot.rotation.x so local +Z stays level in lobby/idle
+  const reloadRoll = rig.reloadAnimTimer > 0 ? 0.35 : 0;
+  rig.weaponMesh.rotation.set(-rig.rightArmPivot.rotation.x, 0, reloadRoll);
+}
+
+export function createVehicleMeshByType(
+  type: 'rover' | 'sprinter' | 'moto'
+): { root: THREE.Group; wheels: THREE.Mesh[] } {
+  if (type === 'sprinter') {
+    const root = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: '#00E5FF',
+      roughness: 0.3,
+      metalness: 0.5,
+    });
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: '#0F172A',
+      roughness: 0.7,
+      metalness: 0.3,
+    });
+    const chassis = new THREE.Mesh(
+      new THREE.BoxGeometry(1.85, 0.45, 3.4),
+      bodyMat
+    );
+    chassis.position.set(0, 0.55, 0);
+    chassis.castShadow = true;
+    root.add(chassis);
+
+    const spoiler = new THREE.Mesh(
+      new THREE.BoxGeometry(1.9, 0.1, 0.45),
+      trimMat
+    );
+    spoiler.position.set(0, 1.15, -1.45);
+    root.add(spoiler);
+
+    const rollBar = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.65, 1.3),
+      trimMat
+    );
+    rollBar.position.set(0, 0.95, -0.15);
+    root.add(rollBar);
+
+    const wheels: THREE.Mesh[] = [];
+    const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.32, 12);
+    wheelGeo.rotateZ(Math.PI / 2);
+    for (const [wx, wy, wz] of [
+      [-1.0, 0.4, 1.1],
+      [1.0, 0.4, 1.1],
+      [-1.0, 0.4, -1.1],
+      [1.0, 0.4, -1.1],
+    ]) {
+      const w = new THREE.Mesh(wheelGeo, trimMat);
+      w.position.set(wx, wy, wz);
+      root.add(w);
+      wheels.push(w);
+    }
+    return { root, wheels };
+  }
+
+  if (type === 'moto') {
+    const root = new THREE.Group();
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: '#F59E0B',
+      roughness: 0.35,
+      metalness: 0.45,
+    });
+    const tireMat = new THREE.MeshStandardMaterial({
+      color: '#1E293B',
+      roughness: 0.75,
+    });
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.52, 1.95),
+      frameMat
+    );
+    body.position.set(0, 0.68, 0);
+    body.castShadow = true;
+    root.add(body);
+
+    const handlebar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, 0.9, 8),
+      tireMat
+    );
+    handlebar.rotation.z = Math.PI / 2;
+    handlebar.position.set(0, 1.12, 0.55);
+    root.add(handlebar);
+
+    const wheels: THREE.Mesh[] = [];
+    const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.22, 12);
+    wheelGeo.rotateZ(Math.PI / 2);
+    for (const wz of [0.85, -0.85]) {
+      const w = new THREE.Mesh(wheelGeo, tireMat);
+      w.position.set(0, 0.38, wz);
+      root.add(w);
+      wheels.push(w);
+    }
+    return { root, wheels };
+  }
+
+  return createIslandRoverMesh();
 }
 
 export function createIslandRoverMesh(): {

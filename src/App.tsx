@@ -17,6 +17,7 @@ import { soundEngine } from './services/audio';
 import { GameSimulationEngine } from './engine/GameSimulation';
 import { MainMenuLobby } from './components/MainMenuLobby';
 import { InGameHUD } from './components/InGameHUD';
+import { HUDLayoutEditorModal } from './components/HUDLayoutEditorModal';
 import { OfflineIndicator } from './components/PWAInstallButton';
 import { Smartphone } from 'lucide-react';
 
@@ -31,6 +32,7 @@ export default function App() {
   const [hudState, setHudState] = useState<interfaceHUDStateSnapshot | null>(
     null
   );
+  const [hudEditorOpen, setHudEditorOpen] = useState(false);
   const [isPortraitMobile, setIsPortraitMobile] = useState(false);
   const [dismissedPortraitHint, setDismissedPortraitHint] = useState(false);
 
@@ -120,9 +122,11 @@ export default function App() {
       eng.input.moveZ = mz;
       eng.input.sprint =
         heldKeys.has('ShiftLeft') || heldKeys.has('ShiftRight');
+      eng.input.braking = heldKeys.has('Space') && Boolean(hudState?.inVehicle);
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      soundEngine.unlockAudio();
       const eng = engineRef.current;
       if (!eng) return;
 
@@ -133,7 +137,7 @@ export default function App() {
       if (e.code === 'Space') {
         if (hudState?.phase === 'deployment') {
           eng.deployFromAircraft();
-        } else {
+        } else if (!hudState?.inVehicle) {
           eng.triggerJump();
         }
       } else if (e.code === 'KeyC') {
@@ -153,7 +157,9 @@ export default function App() {
       } else if (e.code === 'Digit1' || e.code === 'Digit2') {
         eng.switchWeaponSlot();
       } else if (e.code === 'Escape') {
-        if (hudState && hudState.phase !== 'lobby') {
+        if (hudEditorOpen) {
+          setHudEditorOpen(false);
+        } else if (hudState && hudState.phase !== 'lobby') {
           eng.setPaused(hudState.phase !== 'paused');
         }
       }
@@ -172,10 +178,12 @@ export default function App() {
         eng.input.moveZ = 0;
         eng.input.sprint = false;
         eng.input.firing = false;
+        eng.input.braking = false;
       }
     };
 
     const onMouseDown = (e: MouseEvent) => {
+      soundEngine.unlockAudio();
       if (e.button === 2) {
         isMouseDraggingLook = true;
         lastMouseX = e.clientX;
@@ -219,7 +227,7 @@ export default function App() {
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [hudState]);
+  }, [hudState, hudEditorOpen]);
 
   const handleUpdateSaveData = (
     updater: (prev: SaveDataSchema) => SaveDataSchema
@@ -250,11 +258,13 @@ export default function App() {
   };
 
   const handleStartMatch = () => {
+    soundEngine.unlockAudio();
     soundEngine.playClick();
     engineRef.current?.startMatch(selectedMode);
   };
 
   const handleRestartMatch = () => {
+    soundEngine.unlockAudio();
     soundEngine.playClick();
     engineRef.current?.startMatch(selectedMode);
   };
@@ -267,7 +277,10 @@ export default function App() {
   const isInLobby = !hudState || hudState.phase === 'lobby';
 
   return (
-    <main className="relative w-full h-full overflow-hidden bg-[#0B1320] select-none">
+    <main
+      onPointerDown={() => soundEngine.unlockAudio()}
+      className="relative w-full h-full overflow-hidden bg-[#0B1320] select-none"
+    >
       {/* Isolated Three.js WebGL Viewport Container */}
       <div ref={canvasMountRef} className="fixed inset-0 z-0 w-full h-full" />
 
@@ -279,7 +292,8 @@ export default function App() {
           <Smartphone className="w-5 h-5 text-[#FDE047] rotate-90 shrink-0" />
           <div className="text-xs text-slate-200 flex-1">
             Rotate your phone to <strong>Landscape Orientation</strong> for the
-            best classic Battle Royale thumb controls.
+            widest Battle Royale thumb view, or customize controls in{' '}
+            <strong>Edit HUD</strong>.
           </div>
           <button
             onClick={() => setDismissedPortraitHint(true)}
@@ -306,18 +320,28 @@ export default function App() {
           onUpdateSaveData={handleUpdateSaveData}
           onUpdateSettings={handleUpdateSettings}
           onResetAllData={handleResetAllData}
+          onOpenHudEditor={() => setHudEditorOpen(true)}
         />
       ) : (
         hudState && (
           <InGameHUD
             hud={hudState}
             engine={engineRef.current}
-            hudScale={saveData.settings.hudScale}
-            showFps={saveData.settings.showFps}
+            settings={saveData.settings}
             onRestartMatch={handleRestartMatch}
             onReturnToLobby={handleReturnToLobby}
+            onOpenHudEditor={() => setHudEditorOpen(true)}
           />
         )
+      )}
+
+      {/* Interactive Drag-and-Drop HUD Layout Editor Modal */}
+      {hudEditorOpen && (
+        <HUDLayoutEditorModal
+          settings={saveData.settings}
+          onSaveSettings={handleUpdateSettings}
+          onClose={() => setHudEditorOpen(false)}
+        />
       )}
     </main>
   );

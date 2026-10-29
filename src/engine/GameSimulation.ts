@@ -4,6 +4,7 @@ import {
   AIState,
   CharacterAnimState,
   CharacterStance,
+  CombatDamagePopup,
   EQUIPMENT_CATALOG,
   EquipmentConfig,
   GameMode,
@@ -15,7 +16,10 @@ import {
   SquadCommand,
   SquadMemberHUD,
   SUNSET_ISLAND_REGIONS,
+  TacticalRole,
   TrainingTrialState,
+  VehicleHUDInfo,
+  VehicleType,
   WorldCollectible,
   interfaceHUDStateSnapshot,
 } from '../types/game';
@@ -23,13 +27,12 @@ import {
   ArticulatedCharacterRig,
   createArticulatedCharacter,
   createCoverBarrierMesh,
-  createIslandRoverMesh,
   createSupplyCrateMesh,
+  createVehicleMeshByType,
   updateCharacterAnimation,
 } from './CharacterRig';
 import {
   BuiltWorldData,
-  ColliderBox,
   buildGameWorld,
   castSegmentAgainstColliders,
   getSupportHeightAt,
@@ -41,6 +44,7 @@ import { soundEngine } from '../services/audio';
 interface ContestantActor {
   id: string;
   name: string;
+  role: TacticalRole;
   isPlayer: boolean;
   teamId: number; // 1 = Player team, 2..N = Rival teams
   isSquadAlly: boolean;
@@ -80,13 +84,16 @@ interface ContestantActor {
   aiThinkTimer: number;
   aiStuckTimer: number;
   aiLastCheckPos: { x: number; z: number };
+  aiReactionTimer: number;
+  aiLastSeenEnemyPos: { x: number; z: number; time: number } | null;
+  aiTargetLabel: string;
   aiAggression: number;
   aiAccuracy: number;
   eliminations: number;
 }
 
 interface ActiveProjectile {
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   ownerId: string;
   teamId: number;
   x: number;
@@ -105,6 +112,37 @@ interface ActiveCoverBarrier {
   colliderId: string;
   expiresAt: number;
 }
+
+interface ActiveImpactEffect {
+  mesh: THREE.Mesh;
+  expiresAt: number;
+  maxDuration: number;
+}
+
+interface ActiveVehicle {
+  id: string;
+  type: VehicleType;
+  name: string;
+  mesh: { root: THREE.Group; wheels: THREE.Mesh[] };
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  speed: number;
+  maxSpeed: number;
+  turnRate: number;
+  health: number;
+  maxHealth: number;
+  disabled: boolean;
+  driverId: string | null;
+}
+
+const TACTICAL_ROLES: TacticalRole[] = [
+  'Assault',
+  'Support',
+  'Scout',
+  'Defender',
+];
 
 const BOT_NAMES = [
   'KAI_99',
@@ -158,17 +196,33 @@ export class GameSimulationEngine {
   private coverPreviewMesh: THREE.Group;
   private squadMarkerMesh: THREE.Group;
 
-  // Vehicle (Island Rover)
-  private vehicleMesh: { root: THREE.Group; wheels: THREE.Mesh[] } | null = null;
-  private vehicleState = {
-    exists: false,
-    x: 18,
-    y: 0.6,
-    z: 14,
-    yaw: 0,
-    speed: 0,
-    driverId: null as string | null,
-  };
+  // World-Space Aiming Raycaster & Development Debug Visualizer
+  private aimRaycaster = new THREE.Raycaster();
+  private centerNdc = new THREE.Vector2(0, 0);
+  private aimDebugGroup: THREE.Group;
+  private aimDebugCamLine: THREE.Line;
+  private aimDebugMuzzleLine: THREE.Line;
+  private aimDebugMuzzleDot: THREE.Mesh;
+  private aimDebugTargetDot: THREE.Mesh;
+  private currentAimOrigin = new THREE.Vector3();
+  private currentAimTarget = new THREE.Vector3();
+  private currentAimDir = new THREE.Vector3(0, 0, 1);
+
+  // Vehicles Fleet (Island Rover, Dune Sprinter, Tropic Moto)
+  private vehicles: ActiveVehicle[] = [];
+  private activeDriverVehicleId: string | null = null;
+
+  // Combat Feedback & Shared Particle Pool
+  private impactEffects: ActiveImpactEffect[] = [];
+  private sharedImpactGeo = new THREE.SphereGeometry(0.18, 8, 8);
+  private hitMarkerTimer = 0;
+  private hitMarkerIsElim = false;
+  private takingDamageFlashTimer = 0;
+  private cameraShakeTimer = 0;
+  private cameraShakeIntensity = 0;
+  private damagePopups: CombatDamagePopup[] = [];
+  private lastCombatSoundPos: { x: number; z: number; time: number } | null =
+    null;
 
   // Match State
   private phase: MatchPhase = 'lobby';
@@ -272,6 +326,7 @@ export class GameSimulationEngine {
     sprint: false,
     firing: false,
     aiming: false,
+    braking: false,
     coverPreview: false,
   };
 
@@ -454,6 +509,44 @@ export class GameSimulationEngine {
     this.squadMarkerMesh.visible = false;
     this.scene.add(this.squadMarkerMesh);
 
+    // 3D Aiming Debug Visualization (Camera Ray, Muzzle Origin, Target Point, Projectile Direction)
+    this.aimDebugGroup = new THREE.Group();
+    this.aimDebugGroup.visible = false;
+
+    const camLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(),
+      new THREE.Vector3(0, 0, 10),
+    ]);
+    this.aimDebugCamLine = new THREE.Line(
+      camLineGeo,
+      new THREE.LineBasicMaterial({ color: '#00E5FF' })
+    );
+
+    const muzLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(),
+      new THREE.Vector3(0, 0, 10),
+    ]);
+    this.aimDebugMuzzleLine = new THREE.Line(
+      muzLineGeo,
+      new THREE.LineBasicMaterial({ color: '#FF6B1A' })
+    );
+
+    this.aimDebugMuzzleDot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 8, 8),
+      new THREE.MeshBasicMaterial({ color: '#10B981' })
+    );
+    this.aimDebugTargetDot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 10, 10),
+      new THREE.MeshBasicMaterial({ color: '#FDE047' })
+    );
+    this.aimDebugGroup.add(
+      this.aimDebugCamLine,
+      this.aimDebugMuzzleLine,
+      this.aimDebugMuzzleDot,
+      this.aimDebugTargetDot
+    );
+    this.scene.add(this.aimDebugGroup);
+
     this.buildLobbyScene();
 
     window.addEventListener('resize', this.handleResize);
@@ -494,14 +587,21 @@ export class GameSimulationEngine {
     this.settings = settings;
     soundEngine.applySettings(settings);
 
-    const maxRatio =
+    const presetCap =
       settings.graphicsPreset === 'LOW'
         ? 1.0
         : settings.graphicsPreset === 'MEDIUM'
         ? 1.5
         : 2.0;
+    const resScale = THREE.MathUtils.clamp(
+      settings.renderResolutionScale ?? 1.0,
+      0.6,
+      1.5
+    );
     this.renderer.setPixelRatio(
-      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, maxRatio)
+      this.isSoftwareGl
+        ? 1
+        : Math.min((window.devicePixelRatio || 1) * resScale, presetCap)
     );
 
     const enableShadows =
@@ -511,8 +611,29 @@ export class GameSimulationEngine {
     this.renderer.shadowMap.enabled = enableShadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.dirLight.castShadow = enableShadows;
-    const shadowRes = settings.graphicsPreset === 'HIGH' ? 1024 : 512;
+    const shadowRes =
+      settings.graphicsPreset === 'HIGH' &&
+      settings.environmentDetail !== 'low'
+        ? 1024
+        : 512;
     this.dirLight.shadow.mapSize.set(shadowRes, shadowRes);
+
+    if (this.scene && this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.density =
+        settings.environmentDetail === 'low'
+          ? 0.0052
+          : settings.environmentDetail === 'high'
+          ? 0.003
+          : 0.0038;
+    }
+
+    if (this.camera) {
+      const fov = THREE.MathUtils.clamp(settings.cameraFov ?? 62, 55, 80);
+      if (this.camera.fov !== fov) {
+        this.camera.fov = fov;
+        this.camera.updateProjectionMatrix();
+      }
+    }
   }
 
   public updateLobbyCharacter(saveData: SaveDataSchema) {
@@ -634,24 +755,77 @@ export class GameSimulationEngine {
     }
 
     if (mode === 'br_solo' || mode === 'br_squad') {
-      // Spawn Drivable Island Rover Vehicle near Central Estate road
-      this.vehicleMesh = createIslandRoverMesh();
-      this.vehicleState = {
-        exists: true,
-        x: 16,
-        y: groundHeightAt(16, 12, mode),
-        z: 12,
-        yaw: 0.4,
-        speed: 0,
-        driverId: null,
-      };
-      this.vehicleMesh.root.position.set(
-        this.vehicleState.x,
-        this.vehicleState.y,
-        this.vehicleState.z
-      );
-      this.vehicleMesh.root.rotation.y = this.vehicleState.yaw;
-      this.actorsGroup.add(this.vehicleMesh.root);
+      // Spawn 3 Drivable Vehicles at safe open road locations across Sunset Island
+      const vehicleSpawns: {
+        id: string;
+        type: VehicleType;
+        name: string;
+        x: number;
+        z: number;
+        yaw: number;
+        maxSpeed: number;
+        turnRate: number;
+        maxHealth: number;
+      }[] = [
+        {
+          id: 'veh_rover',
+          type: 'rover',
+          name: 'Island Rover 4x4',
+          x: 16,
+          z: 12,
+          yaw: 0.4,
+          maxSpeed: 22,
+          turnRate: 1.9,
+          maxHealth: 240,
+        },
+        {
+          id: 'veh_sprinter',
+          type: 'sprinter',
+          name: 'Dune Sprinter Buggy',
+          x: 84,
+          z: 68,
+          yaw: -0.6,
+          maxSpeed: 27,
+          turnRate: 2.3,
+          maxHealth: 170,
+        },
+        {
+          id: 'veh_moto',
+          type: 'moto',
+          name: 'Tropic Moto',
+          x: -76,
+          z: -56,
+          yaw: 0.8,
+          maxSpeed: 30,
+          turnRate: 2.7,
+          maxHealth: 120,
+        },
+      ];
+
+      for (const vs of vehicleSpawns) {
+        const vMesh = createVehicleMeshByType(vs.type);
+        const vy = groundHeightAt(vs.x, vs.z, mode);
+        vMesh.root.position.set(vs.x, vy, vs.z);
+        vMesh.root.rotation.y = vs.yaw;
+        this.actorsGroup.add(vMesh.root);
+        this.vehicles.push({
+          id: vs.id,
+          type: vs.type,
+          name: vs.name,
+          mesh: vMesh,
+          x: vs.x,
+          y: vy,
+          z: vs.z,
+          yaw: vs.yaw,
+          speed: 0,
+          maxSpeed: vs.maxSpeed,
+          turnRate: vs.turnRate,
+          health: vs.maxHealth,
+          maxHealth: vs.maxHealth,
+          disabled: false,
+          driverId: null,
+        });
+      }
 
       this.setupBattleRoyaleRoster(mode === 'br_squad');
       this.phase = 'deployment';
@@ -699,6 +873,7 @@ export class GameSimulationEngine {
     const playerActor: ContestantActor = {
       id: 'player',
       name: this.saveData.playerName,
+      role: 'Assault',
       isPlayer: true,
       teamId: 1,
       isSquadAlly: true,
@@ -736,6 +911,9 @@ export class GameSimulationEngine {
       aiThinkTimer: 0,
       aiStuckTimer: 0,
       aiLastCheckPos: { x: 0, z: 0 },
+      aiReactionTimer: 0,
+      aiLastSeenEnemyPos: null,
+      aiTargetLabel: 'None',
       aiAggression: 0.5,
       aiAccuracy: 0.5,
       eliminations: 0,
@@ -746,6 +924,7 @@ export class GameSimulationEngine {
     for (let i = 0; i < 19; i++) {
       const isAlly = isSquad && i < 3;
       const teamId = isAlly ? 1 : Math.floor(i / (isSquad ? 4 : 1)) + 2;
+      const role = TACTICAL_ROLES[(i + 1) % TACTICAL_ROLES.length];
       const outfit = OUTFIT_CATALOG[(i + 1) % OUTFIT_CATALOG.length];
       const rig = createArticulatedCharacter(
         outfit.id,
@@ -757,17 +936,24 @@ export class GameSimulationEngine {
       const reg =
         SUNSET_ISLAND_REGIONS[i % SUNSET_ISLAND_REGIONS.length];
       const spawnX = isAlly
-        ? -85 + (i + 1) * 6
+        ? -85 + (i + 1) * 7
         : reg.x + (Math.random() - 0.5) * 32;
       const spawnZ = isAlly
-        ? -65 + (i + 1) * 6
+        ? -65 + (i + 1) * 7
         : reg.z + (Math.random() - 0.5) * 32;
       const spawnY = groundHeightAt(spawnX, spawnZ, this.mode);
 
-      const botWeapon = equipList[i % equipList.length];
+      // Assign role-appropriate preferred weapon
+      let botWeapon = equipList[i % equipList.length];
+      if (role === 'Scout') botWeapon = EQUIPMENT_CATALOG.precision_caster;
+      else if (role === 'Assault') botWeapon = EQUIPMENT_CATALOG.rapid_pulse;
+      else if (role === 'Defender') botWeapon = EQUIPMENT_CATALOG.close_scatter;
+      else if (role === 'Support') botWeapon = EQUIPMENT_CATALOG.burst_light;
+
       const bot: ContestantActor = {
         id: `bot_${i}`,
         name: isAlly ? `ALLY_${BOT_NAMES[i]}` : BOT_NAMES[i],
+        role,
         isPlayer: false,
         teamId,
         isSquadAlly: isAlly,
@@ -797,15 +983,19 @@ export class GameSimulationEngine {
         reserveAmmo: 120,
         fireCooldownTimer: 0,
         reloadTimer: 0,
-        medKits: 1,
+        medKits: role === 'Support' ? 2 : 1,
         shieldCells: 1,
         coverGadgets: 1,
         aiState: isAlly ? 'Following' : 'Exploring',
         aiTargetPos: { x: reg.x, z: reg.z },
-        aiThinkTimer: (i % 5) * 0.15,
+        aiThinkTimer: (i % 5) * 0.14,
         aiStuckTimer: 0,
         aiLastCheckPos: { x: spawnX, z: spawnZ },
-        aiAggression: 0.4 + (i % 5) * 0.12,
+        aiReactionTimer: 0,
+        aiLastSeenEnemyPos: null,
+        aiTargetLabel: reg.name,
+        aiAggression:
+          role === 'Assault' ? 0.78 : role === 'Defender' ? 0.45 : 0.6,
         aiAccuracy: 0.45 + (i % 4) * 0.1,
         eliminations: 0,
       };
@@ -826,6 +1016,7 @@ export class GameSimulationEngine {
     const playerActor: ContestantActor = {
       id: 'player',
       name: this.saveData.playerName,
+      role: 'Assault',
       isPlayer: true,
       teamId: 1,
       isSquadAlly: true,
@@ -863,6 +1054,9 @@ export class GameSimulationEngine {
       aiThinkTimer: 0,
       aiStuckTimer: 0,
       aiLastCheckPos: { x: -9, z: 38 },
+      aiReactionTimer: 0,
+      aiLastSeenEnemyPos: null,
+      aiTargetLabel: 'Sunset Yard',
       aiAggression: 0.7,
       aiAccuracy: 0.65,
       eliminations: 0,
@@ -874,6 +1068,7 @@ export class GameSimulationEngine {
     for (let i = 0; i < 7; i++) {
       const isAlly = i < 3;
       const teamId = isAlly ? 1 : 2;
+      const role = TACTICAL_ROLES[(i + 1) % TACTICAL_ROLES.length];
       const rig = createArticulatedCharacter(
         OUTFIT_CATALOG[(i + 1) % OUTFIT_CATALOG.length].id,
         'tactical',
@@ -885,6 +1080,7 @@ export class GameSimulationEngine {
       const bot: ContestantActor = {
         id: `arena_bot_${i}`,
         name: isAlly ? `ALLY_${BOT_NAMES[i]}` : `RIVAL_${BOT_NAMES[i + 4]}`,
+        role,
         isPlayer: false,
         teamId,
         isSquadAlly: isAlly,
@@ -922,6 +1118,9 @@ export class GameSimulationEngine {
         aiThinkTimer: i * 0.1,
         aiStuckTimer: 0,
         aiLastCheckPos: { x: 0, z: 0 },
+        aiReactionTimer: 0,
+        aiLastSeenEnemyPos: null,
+        aiTargetLabel: 'Center Hub',
         aiAggression: 0.65,
         aiAccuracy: 0.55,
         eliminations: 0,
@@ -999,6 +1198,7 @@ export class GameSimulationEngine {
     const playerActor: ContestantActor = {
       id: 'player',
       name: this.saveData.playerName,
+      role: 'Assault',
       isPlayer: true,
       teamId: 1,
       isSquadAlly: true,
@@ -1036,6 +1236,9 @@ export class GameSimulationEngine {
       aiThinkTimer: 0,
       aiStuckTimer: 0,
       aiLastCheckPos: { x: 0, z: 5 },
+      aiReactionTimer: 0,
+      aiLastSeenEnemyPos: null,
+      aiTargetLabel: 'Training Range',
       aiAggression: 0.5,
       aiAccuracy: 0.5,
       eliminations: 0,
@@ -1057,12 +1260,18 @@ export class GameSimulationEngine {
   }
 
   public rotateCamera(deltaYaw: number, deltaPitch: number) {
-    const sens = this.settings.cameraSensitivity;
-    this.cameraYaw -= deltaYaw * sens;
+    const baseSens = this.settings.cameraSensitivity ?? 1.0;
+    const aimMult = this.input.aiming
+      ? this.settings.aimingSensitivity ?? 0.75
+      : 1.0;
+    const horizSens = this.settings.horizontalSensitivity ?? 1.0;
+    const vertSens = this.settings.verticalSensitivity ?? 1.0;
+
+    this.cameraYaw -= deltaYaw * baseSens * aimMult * horizSens;
     const pitchDir = this.settings.invertY ? -1 : 1;
     this.cameraPitch = THREE.MathUtils.clamp(
-      this.cameraPitch + deltaPitch * sens * pitchDir,
-      -0.65,
+      this.cameraPitch + deltaPitch * baseSens * aimMult * vertSens * pitchDir,
+      -0.68,
       1.05
     );
   }
@@ -1089,7 +1298,7 @@ export class GameSimulationEngine {
     if (Math.abs(player.y - groundY) < 0.25) {
       player.vy = 8.4;
       player.animState = 'jumping';
-      soundEngine.playClick();
+      soundEngine.playJump();
     }
   }
 
@@ -1115,7 +1324,8 @@ export class GameSimulationEngine {
       player.reserveAmmo > 0
     ) {
       player.reloadTimer = player.weapon.reloadTime;
-      soundEngine.playClick();
+      player.rig.reloadAnimTimer = player.weapon.reloadTime;
+      soundEngine.playReload();
     }
   }
 
@@ -1250,30 +1460,75 @@ export class GameSimulationEngine {
 
   public toggleVehicleEnterExit() {
     const player = this.getPlayer();
-    if (!player || player.eliminated || !this.vehicleState.exists) return;
+    if (!player || player.eliminated) return;
 
-    if (this.vehicleState.driverId === 'player') {
-      // Exit vehicle safely to the left
-      this.vehicleState.driverId = null;
-      this.vehicleState.speed = 0;
+    if (this.activeDriverVehicleId) {
+      const veh = this.vehicles.find((v) => v.id === this.activeDriverVehicleId);
+      this.activeDriverVehicleId = null;
+      if (veh) {
+        veh.driverId = null;
+        veh.speed = 0;
+        // Safe exit check: try left side, right side, rear so player never gets trapped in a wall
+        const exitOffsets = [
+          [Math.cos(veh.yaw) * 2.4, -Math.sin(veh.yaw) * 2.4],
+          [-Math.cos(veh.yaw) * 2.4, Math.sin(veh.yaw) * 2.4],
+          [-Math.sin(veh.yaw) * 2.8, -Math.cos(veh.yaw) * 2.8],
+        ];
+        let exitX = veh.x;
+        let exitZ = veh.z;
+        for (const [ox, oz] of exitOffsets) {
+          const tx = veh.x + ox;
+          const tz = veh.z + oz;
+          const ty = groundHeightAt(tx, tz, this.mode);
+          const col = resolveHorizontalCollision(
+            tx,
+            ty,
+            tz,
+            0.45,
+            1.75,
+            this.worldData?.colliders || []
+          );
+          if (!col.hitWall) {
+            exitX = col.x;
+            exitZ = col.z;
+            break;
+          }
+        }
+        player.x = exitX;
+        player.z = exitZ;
+        player.y = groundHeightAt(player.x, player.z, this.mode);
+      }
       player.stance = 'standing';
-      player.x = this.vehicleState.x + Math.cos(this.vehicleState.yaw) * 2.4;
-      player.z = this.vehicleState.z - Math.sin(this.vehicleState.yaw) * 2.4;
-      player.y = groundHeightAt(player.x, player.z, this.mode);
       player.rig.root.visible = true;
       soundEngine.playClick();
     } else {
-      const dist = Math.hypot(
-        player.x - this.vehicleState.x,
-        player.z - this.vehicleState.z
-      );
-      if (dist <= 4.5) {
-        this.vehicleState.driverId = 'player';
+      const nearestVeh = this.findNearestVehicle(player.x, player.z, 4.8);
+      if (nearestVeh && !nearestVeh.disabled) {
+        this.activeDriverVehicleId = nearestVeh.id;
+        nearestVeh.driverId = 'player';
         player.stance = 'driving';
         player.rig.root.visible = false;
         soundEngine.playClick();
       }
     }
+  }
+
+  private findNearestVehicle(
+    x: number,
+    z: number,
+    maxDist: number
+  ): ActiveVehicle | null {
+    let best: ActiveVehicle | null = null;
+    let bestD = maxDist;
+    for (const v of this.vehicles) {
+      if (v.disabled) continue;
+      const d = Math.hypot(v.x - x, v.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    return best;
   }
 
   public issueSquadCommand(cmd: SquadCommand, markerPos?: { x: number; z: number }) {
@@ -1424,9 +1679,13 @@ export class GameSimulationEngine {
     this.lootItems.clear();
     this.projectiles = [];
     this.activeBarriers = [];
-    this.vehicleMesh = null;
-    this.vehicleState.exists = false;
-    this.vehicleState.driverId = null;
+    this.vehicles = [];
+    this.activeDriverVehicleId = null;
+    this.impactEffects = [];
+    this.damagePopups = [];
+    this.hitMarkerTimer = 0;
+    this.takingDamageFlashTimer = 0;
+    this.cameraShakeTimer = 0;
     this.zoneRingMesh.visible = false;
     this.nextZoneRingMesh.visible = false;
     this.transportMesh.visible = false;
@@ -1608,7 +1867,41 @@ export class GameSimulationEngine {
       this.updateSafeZone(dt);
     }
 
-    // 4. Update Temporary Cover Barriers expiration
+    // 4. Update Temporary Cover Barriers & Combat Feedback Timers
+    if (this.hitMarkerTimer > 0) {
+      this.hitMarkerTimer = Math.max(0, this.hitMarkerTimer - dt);
+    }
+    if (this.takingDamageFlashTimer > 0) {
+      this.takingDamageFlashTimer = Math.max(0, this.takingDamageFlashTimer - dt);
+    }
+    if (this.cameraShakeTimer > 0) {
+      this.cameraShakeTimer = Math.max(0, this.cameraShakeTimer - dt);
+    }
+
+    // Expire floating damage numbers after 0.85s
+    if (this.damagePopups.length > 0) {
+      this.damagePopups = this.damagePopups.filter(
+        (dp) => this.matchTimeSec - dp.createdAt < 0.85
+      );
+    }
+
+    // Update & clean up 3D surface impact bursts
+    for (let i = this.impactEffects.length - 1; i >= 0; i--) {
+      const fx = this.impactEffects[i];
+      const rem = fx.expiresAt - this.matchTimeSec;
+      if (rem <= 0) {
+        this.effectsGroup.remove(fx.mesh);
+        (fx.mesh.material as THREE.Material).dispose();
+        this.impactEffects.splice(i, 1);
+      } else {
+        const progress = 1 - rem / fx.maxDuration;
+        const s = 1 + progress * 1.9;
+        fx.mesh.scale.set(s, s, s);
+        const mat = fx.mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = Math.max(0, (1 - progress) * 0.85);
+      }
+    }
+
     for (let i = this.activeBarriers.length - 1; i >= 0; i--) {
       const b = this.activeBarriers[i];
       if (this.matchTimeSec >= b.expiresAt) {
@@ -1622,10 +1915,10 @@ export class GameSimulationEngine {
       }
     }
 
-    // 5. Update Player & Vehicle Controls
+    // 5. Update Player & Vehicle Movement
     const player = this.getPlayer();
     if (player && !player.eliminated && this.phase === 'active') {
-      if (this.vehicleState.driverId === 'player') {
+      if (this.activeDriverVehicleId) {
         this.updateVehiclePhysics(player, dt);
       } else {
         this.updatePlayerController(player, dt);
@@ -1638,7 +1931,7 @@ export class GameSimulationEngine {
       this.updateAIActor(actor, dt, elapsed);
     }
 
-    // 7. Update Character Visual Rigs
+    // 7. Update Character Visual Rigs & World Matrices
     for (const actor of this.actors) {
       if (actor.eliminated) continue;
       actor.rig.root.position.set(actor.x, actor.y, actor.z);
@@ -1650,20 +1943,36 @@ export class GameSimulationEngine {
         elapsed,
         dt
       );
+      actor.rig.root.updateMatrixWorld(true);
     }
 
-    // 8. Update Projectiles & Hit Detection
+    // 8. Update Camera FIRST so World-Space Reticle Raycast matches rendered view 100%
+    this.updateCameraFollow(dt);
+    this.camera.updateMatrixWorld(true);
+
+    // 9. Compute Exact World-Space Crossbow Aiming, Orient Weapon Muzzle, & Fire
+    if (
+      player &&
+      !player.eliminated &&
+      this.phase === 'active' &&
+      !this.activeDriverVehicleId &&
+      player.stance !== 'parachuting' &&
+      player.stance !== 'downed'
+    ) {
+      this.updatePlayerAimAndCombat(player);
+    } else {
+      this.aimDebugGroup.visible = false;
+    }
+
+    // 10. Update Projectiles & Hit Detection
     this.updateProjectiles(dt);
 
-    // 9. Update Training Grounds Trials
+    // 11. Update Training Grounds Trials
     if (this.mode === 'training' && player) {
       this.updateTrainingTrials(player, dt);
     }
 
-    // 10. Update Camera (Third-Person Follow or Spectator)
-    this.updateCameraFollow(dt);
-
-    // 11. Check Match / Round Win Conditions
+    // 12. Check Match / Round Win Conditions
     this.evaluateMatchOutcome();
   }
 
@@ -1742,66 +2051,67 @@ export class GameSimulationEngine {
   }
 
   private updateVehiclePhysics(player: ContestantActor, dt: number) {
-    if (!this.vehicleMesh) return;
-    const accelInput = this.input.moveZ;
-    const steerInput = -this.input.moveX;
-
-    const targetSpeed = accelInput * 22;
-    this.vehicleState.speed = THREE.MathUtils.damp(
-      this.vehicleState.speed,
-      targetSpeed,
-      4.5,
-      dt
-    );
-
-    if (Math.abs(this.vehicleState.speed) > 0.4) {
-      const turnDir = this.vehicleState.speed >= 0 ? 1 : -1;
-      this.vehicleState.yaw += steerInput * 1.95 * turnDir * dt;
+    const veh = this.vehicles.find((v) => v.id === this.activeDriverVehicleId);
+    if (!veh || veh.disabled) {
+      this.toggleVehicleEnterExit();
+      return;
     }
 
-    const nextX =
-      this.vehicleState.x +
-      Math.sin(this.vehicleState.yaw) * this.vehicleState.speed * dt;
-    const nextZ =
-      this.vehicleState.z +
-      Math.cos(this.vehicleState.yaw) * this.vehicleState.speed * dt;
+    const accelInput = this.input.braking ? 0 : this.input.moveZ;
+    const steerInput = -this.input.moveX;
+
+    const targetSpeed = accelInput * veh.maxSpeed;
+    const dampRate = this.input.braking ? 11.0 : 4.8;
+    veh.speed = THREE.MathUtils.damp(veh.speed, targetSpeed, dampRate, dt);
+
+    if (Math.abs(veh.speed) > 0.35) {
+      const turnDir = veh.speed >= 0 ? 1 : -1;
+      veh.yaw += steerInput * veh.turnRate * turnDir * dt;
+      soundEngine.playVehicleEnginePulse(Math.abs(veh.speed) / veh.maxSpeed);
+    }
+
+    const nextX = veh.x + Math.sin(veh.yaw) * veh.speed * dt;
+    const nextZ = veh.z + Math.cos(veh.yaw) * veh.speed * dt;
     const nextY = groundHeightAt(nextX, nextZ, this.mode);
 
     const col = resolveHorizontalCollision(
       nextX,
       nextY,
       nextZ,
-      1.6,
-      2.0,
+      veh.type === 'moto' ? 0.9 : 1.5,
+      1.9,
       this.worldData?.colliders || []
     );
     if (col.hitWall) {
-      this.vehicleState.speed *= 0.35;
+      if (Math.abs(veh.speed) > 10) {
+        veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.8);
+        this.triggerCameraShake(0.18, 0.15);
+        soundEngine.playSurfaceImpact('wall');
+      }
+      veh.speed *= 0.25;
+      if (veh.health <= 0) {
+        veh.disabled = true;
+        this.spawnImpactBurst(veh.x, veh.y + 0.8, veh.z, '#FF6B1A', 0.45);
+        this.toggleVehicleEnterExit();
+        return;
+      }
     }
 
-    this.vehicleState.x = THREE.MathUtils.clamp(col.x, -180, 180);
-    this.vehicleState.z = THREE.MathUtils.clamp(col.z, -180, 180);
-    this.vehicleState.y = groundHeightAt(
-      this.vehicleState.x,
-      this.vehicleState.z,
-      this.mode
-    );
+    veh.x = THREE.MathUtils.clamp(col.x, -180, 180);
+    veh.z = THREE.MathUtils.clamp(col.z, -180, 180);
+    veh.y = groundHeightAt(veh.x, veh.z, this.mode);
 
-    this.vehicleMesh.root.position.set(
-      this.vehicleState.x,
-      this.vehicleState.y,
-      this.vehicleState.z
-    );
-    this.vehicleMesh.root.rotation.y = this.vehicleState.yaw;
+    veh.mesh.root.position.set(veh.x, veh.y, veh.z);
+    veh.mesh.root.rotation.y = veh.yaw;
 
-    for (const w of this.vehicleMesh.wheels) {
-      w.rotation.x += this.vehicleState.speed * dt * 1.8;
+    for (const w of veh.mesh.wheels) {
+      w.rotation.x += veh.speed * dt * 1.9;
     }
 
-    player.x = this.vehicleState.x;
-    player.y = this.vehicleState.y;
-    player.z = this.vehicleState.z;
-    player.yaw = this.vehicleState.yaw;
+    player.x = veh.x;
+    player.y = veh.y;
+    player.z = veh.z;
+    player.yaw = veh.yaw;
   }
 
   private updatePlayerController(player: ContestantActor, dt: number) {
@@ -1861,13 +2171,13 @@ export class GameSimulationEngine {
         player.stance = 'standing';
         player.animState = 'landing';
         this.landedInMatch = true;
-        soundEngine.playFootstep(true);
+        soundEngine.playLand();
       }
       return;
     }
 
     // Ground / Rooftop Movement
-    const sens = this.settings.movementSensitivity;
+    const sens = this.settings.movementSensitivity ?? 1.0;
     const rawMag = Math.hypot(this.input.moveX, this.input.moveZ);
     const moveMag = Math.min(1, rawMag * sens);
 
@@ -1937,15 +2247,31 @@ export class GameSimulationEngine {
       this.worldData?.walkableSurfaces || []
     );
     if (player.y > supportY + 0.05 || player.vy > 0) {
+      const prevVy = player.vy;
       player.vy -= 22 * dt;
       player.y += player.vy * dt;
       if (player.y <= supportY) {
         player.y = supportY;
         player.vy = 0;
+        if (prevVy < -4.5) {
+          soundEngine.playLand();
+        }
       }
     } else {
       player.y = THREE.MathUtils.damp(player.y, supportY, 18, dt);
       player.vy = 0;
+    }
+
+    // Optional Auto-Pickup for consumables / ammo
+    if (this.settings.autoPickupInteract) {
+      const autoItem = this.findNearestLoot(player.x, player.z, 2.2);
+      if (autoItem && autoItem.data.type !== 'equipment') {
+        this.applyLootToActor(player, autoItem.data);
+        autoItem.data.collected = true;
+        autoItem.mesh.visible = false;
+        this.suppliesCollectedInMatch++;
+        soundEngine.playPickup();
+      }
     }
 
     // Animation state determination
@@ -1980,7 +2306,7 @@ export class GameSimulationEngine {
       this.coverPreviewMesh.visible = false;
     }
 
-    // Weapon Cooldown & Reloading
+    // Weapon Cooldown & Reloading timers
     if (player.fireCooldownTimer > 0) {
       player.fireCooldownTimer = Math.max(0, player.fireCooldownTimer - dt);
     }
@@ -1992,12 +2318,6 @@ export class GameSimulationEngine {
         const take = Math.min(needed, player.reserveAmmo);
         player.clipAmmo += take;
         player.reserveAmmo -= take;
-      }
-    } else if (this.input.firing && player.fireCooldownTimer <= 0) {
-      if (player.clipAmmo > 0) {
-        this.fireActorWeapon(player, this.cameraPitch);
-      } else if (player.reserveAmmo > 0) {
-        this.triggerReload();
       }
     }
 
@@ -2018,6 +2338,227 @@ export class GameSimulationEngine {
     }
   }
 
+  /**
+   * 10-Step World-Space Aiming Architecture:
+   * 1. Identifies active PerspectiveCamera and its world-space position.
+   * 2. Uses exact center-screen reticle NDC (0, 0).
+   * 3. Casts a world-space ray from camera through (0, 0).
+   * 4. Raycasts against colliders, enemies, training targets, and terrain.
+   * 5. Uses fallback point along ray if nothing is hit.
+   * 6. Orients crossbow model toward target and reads exact world-space muzzleNode origin.
+   * 7. Computes normalized direction vector from muzzle origin to intended target.
+   * 8-10. Spawns oriented projectile at crossbow muzzle traveling along that exact direction.
+   */
+  private updatePlayerAimAndCombat(player: ContestantActor) {
+    // Steps 1-3: Cast ray from camera through center reticle (0, 0)
+    this.aimRaycaster.setFromCamera(this.centerNdc, this.camera);
+    const camPos = this.aimRaycaster.ray.origin;
+    const rayDir = this.aimRaycaster.ray.direction;
+
+    const playerChestY =
+      player.y + (player.stance === 'crouching' ? 0.95 : 1.35);
+    const camToPlayerDist = Math.hypot(
+      player.x - camPos.x,
+      playerChestY - camPos.y,
+      player.z - camPos.z
+    );
+    // Start environment ray slightly ahead of player body so camera shoulder offset never hits walls behind player
+    const minRayT = Math.max(1.2, camToPlayerDist + 0.25);
+    const maxRayT = 160;
+    let bestT = maxRayT;
+
+    const rayStart = camPos.clone().addScaledVector(rayDir, minRayT);
+    const rayEnd = camPos.clone().addScaledVector(rayDir, maxRayT);
+    const colliders = this.worldData?.colliders || [];
+
+    // Step 4A: Check world & cover barrier colliders
+    const wallHit = castSegmentAgainstColliders(
+      rayStart.x,
+      rayStart.y,
+      rayStart.z,
+      rayEnd.x,
+      rayEnd.y,
+      rayEnd.z,
+      colliders
+    );
+    if (wallHit.hit) {
+      const hitDist = Math.hypot(
+        wallHit.hitX - camPos.x,
+        wallHit.hitY - camPos.y,
+        wallHit.hitZ - camPos.z
+      );
+      if (hitDist >= minRayT && hitDist < bestT) {
+        bestT = hitDist;
+      }
+    }
+
+    // Step 4B: Check Training Grounds targets
+    if (this.mode === 'training' && this.worldData) {
+      for (const t of this.worldData.trainingTargets) {
+        if (t.hit) continue;
+        const toTargetX = t.x - camPos.x;
+        const toTargetY = t.y - camPos.y;
+        const toTargetZ = t.z - camPos.z;
+        const projT =
+          toTargetX * rayDir.x + toTargetY * rayDir.y + toTargetZ * rayDir.z;
+        if (projT >= minRayT && projT < bestT) {
+          const px = camPos.x + rayDir.x * projT - t.x;
+          const py = camPos.y + rayDir.y * projT - t.y;
+          const pz = camPos.z + rayDir.z * projT - t.z;
+          const perpDist = Math.hypot(px, py, pz);
+          if (perpDist <= 0.95) {
+            bestT = projT;
+          }
+        }
+      }
+    }
+
+    // Step 4C: Check Enemy Contestants + Optional Subtle Aim Assist
+    let assistTargetPoint: THREE.Vector3 | null = null;
+    let bestAssistAngle =
+      0.042 * THREE.MathUtils.clamp(this.settings.aimAssistStrength ?? 0.45, 0.1, 1.0);
+
+    for (const actor of this.actors) {
+      if (
+        actor.eliminated ||
+        actor.id === player.id ||
+        actor.teamId === player.teamId
+      ) {
+        continue;
+      }
+      const actorCenterY =
+        actor.y + (actor.stance === 'crouching' ? 0.65 : 0.98);
+      const dx = actor.x - camPos.x;
+      const dy = actorCenterY - camPos.y;
+      const dz = actor.z - camPos.z;
+      const projT = dx * rayDir.x + dy * rayDir.y + dz * rayDir.z;
+      if (projT < minRayT || projT > bestT) continue;
+
+      const perpX = camPos.x + rayDir.x * projT - actor.x;
+      const perpY = camPos.y + rayDir.y * projT - actorCenterY;
+      const perpZ = camPos.z + rayDir.z * projT - actor.z;
+      const perpDist = Math.hypot(perpX, perpY, perpZ);
+
+      if (perpDist <= 0.62) {
+        bestT = projT;
+        assistTargetPoint = new THREE.Vector3(actor.x, actorCenterY, actor.z);
+      } else if (
+        this.settings.aimAssist &&
+        projT <= player.weapon.effectiveRange
+      ) {
+        const angle = Math.atan2(perpDist, projT);
+        if (angle < bestAssistAngle) {
+          const los = castSegmentAgainstColliders(
+            camPos.x,
+            camPos.y,
+            camPos.z,
+            actor.x,
+            actorCenterY,
+            actor.z,
+            colliders
+          );
+          if (!los.hit) {
+            bestAssistAngle = angle;
+            const rawRayPoint = camPos.clone().addScaledVector(rayDir, projT);
+            const enemyChest = new THREE.Vector3(actor.x, actorCenterY, actor.z);
+            assistTargetPoint = rawRayPoint.lerp(enemyChest, 0.55);
+          }
+        }
+      }
+    }
+
+    // Step 4D: Check Ground Terrain intersection when looking downward
+    if (rayDir.y < -0.02) {
+      for (let t = minRayT; t < bestT; t += 2.0) {
+        const gx = camPos.x + rayDir.x * t;
+        const gy = camPos.y + rayDir.y * t;
+        const gz = camPos.z + rayDir.z * t;
+        const terrainY = groundHeightAt(gx, gz, this.mode);
+        if (gy <= terrainY) {
+          bestT = Math.max(minRayT, t - 0.5);
+          break;
+        }
+      }
+    }
+
+    // Step 5: Determine Intended 3D World Target Point
+    const intendedTarget =
+      assistTargetPoint || camPos.clone().addScaledVector(rayDir, bestT);
+
+    // Step 6: Orient Crossbow Model toward Intended Target & Read Muzzle World Origin
+    if (this.input.aiming || this.input.firing) {
+      player.rig.weaponMesh.lookAt(intendedTarget);
+      player.rig.weaponMesh.updateMatrixWorld(true);
+    }
+
+    const muzzleOrigin = new THREE.Vector3();
+    player.rig.muzzleNode.getWorldPosition(muzzleOrigin);
+
+    // Prevent muzzle origin from clipping through a wall if player stands flush against one
+    const chestCheck = castSegmentAgainstColliders(
+      player.x,
+      playerChestY,
+      player.z,
+      muzzleOrigin.x,
+      muzzleOrigin.y,
+      muzzleOrigin.z,
+      colliders
+    );
+    if (chestCheck.hit) {
+      muzzleOrigin.set(
+        THREE.MathUtils.lerp(player.x, chestCheck.hitX, 0.7),
+        THREE.MathUtils.lerp(playerChestY, chestCheck.hitY, 0.7),
+        THREE.MathUtils.lerp(player.z, chestCheck.hitZ, 0.7)
+      );
+    }
+
+    // Step 7: Calculate Normalized Firing Direction from Muzzle Origin -> Intended Target
+    const fireDir = intendedTarget.clone().sub(muzzleOrigin);
+    if (fireDir.lengthSq() < 0.25 || fireDir.dot(rayDir) < 0.15) {
+      fireDir.copy(rayDir).normalize();
+    } else {
+      fireDir.normalize();
+    }
+
+    this.currentAimOrigin.copy(muzzleOrigin);
+    this.currentAimTarget.copy(intendedTarget);
+    this.currentAimDir.copy(fireDir);
+
+    // Update optional 3D Aim Debug Visualizer
+    if (this.settings.showAimDebug) {
+      this.aimDebugGroup.visible = true;
+      this.aimDebugMuzzleDot.position.copy(muzzleOrigin);
+      this.aimDebugTargetDot.position.copy(intendedTarget);
+      this.aimDebugCamLine.geometry.setFromPoints([
+        camPos.clone().add(new THREE.Vector3(0, -0.08, 0)),
+        intendedTarget,
+      ]);
+      this.aimDebugMuzzleLine.geometry.setFromPoints([
+        muzzleOrigin,
+        intendedTarget,
+      ]);
+    } else {
+      this.aimDebugGroup.visible = false;
+    }
+
+    // Step 8-9: Fire Weapon if Trigger Held
+    if (
+      this.input.firing &&
+      player.reloadTimer <= 0 &&
+      player.fireCooldownTimer <= 0
+    ) {
+      if (player.clipAmmo > 0) {
+        this.fireProjectileFromOrigin(
+          player,
+          this.currentAimOrigin,
+          this.currentAimDir
+        );
+      } else if (player.reserveAmmo > 0) {
+        this.triggerReload();
+      }
+    }
+  }
+
   private findNearbyDownedAlly(actor: ContestantActor): ContestantActor | null {
     for (const other of this.actors) {
       if (
@@ -2035,48 +2576,171 @@ export class GameSimulationEngine {
   }
 
   private fireActorWeapon(actor: ContestantActor, aimPitch: number) {
-    actor.clipAmmo = Math.max(0, actor.clipAmmo - 1);
-    actor.fireCooldownTimer = actor.weapon.fireCooldown;
-    if (actor.isPlayer) {
-      soundEngine.playWeaponFire(actor.weapon.id);
-    }
+    const muzzleOrigin = new THREE.Vector3();
+    actor.rig.root.updateMatrixWorld(true);
+    actor.rig.muzzleNode.getWorldPosition(muzzleOrigin);
 
-    const muzzleY = actor.y + (actor.stance === 'crouching' ? 1.0 : 1.38);
     const forwardX = Math.sin(actor.yaw) * Math.cos(aimPitch);
     const forwardY = Math.sin(aimPitch);
     const forwardZ = Math.cos(actor.yaw) * Math.cos(aimPitch);
+    const baseDir = new THREE.Vector3(forwardX, forwardY, forwardZ).normalize();
+
+    this.fireProjectileFromOrigin(actor, muzzleOrigin, baseDir);
+  }
+
+  private spawnImpactBurst(
+    x: number,
+    y: number,
+    z: number,
+    colorHex: string,
+    duration = 0.22
+  ) {
+    if (this.settings.combatEffects === 'low' && this.impactEffects.length >= 4) {
+      return;
+    }
+    const maxCap =
+      this.settings.combatEffects === 'high'
+        ? 16
+        : this.settings.combatEffects === 'medium'
+        ? 10
+        : 5;
+    if (this.impactEffects.length >= maxCap) {
+      const oldest = this.impactEffects.shift()!;
+      this.effectsGroup.remove(oldest.mesh);
+      (oldest.mesh.material as THREE.Material).dispose();
+    }
+
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const mesh = new THREE.Mesh(this.sharedImpactGeo, mat);
+    mesh.position.set(x, y, z);
+    this.effectsGroup.add(mesh);
+    this.impactEffects.push({
+      mesh,
+      expiresAt: this.matchTimeSec + duration,
+      maxDuration: duration,
+    });
+  }
+
+  private triggerCameraShake(duration: number, baseIntensity: number) {
+    if (this.settings.cameraShake === 'off') return;
+    const mult = this.settings.cameraShake === 'high' ? 1.35 : 0.65;
+    this.cameraShakeTimer = Math.max(this.cameraShakeTimer, duration);
+    this.cameraShakeIntensity = baseIntensity * mult;
+  }
+
+  private spawnDamagePopup(
+    worldX: number,
+    worldY: number,
+    worldZ: number,
+    amount: number,
+    isShield: boolean
+  ) {
+    if (!this.settings.damageNumbersEnabled) return;
+    const v = new THREE.Vector3(worldX, worldY, worldZ);
+    v.project(this.camera);
+    if (v.z > 1) return; // behind camera
+
+    const screenX = THREE.MathUtils.clamp((v.x * 0.5 + 0.5) * 100, 12, 88);
+    const screenY = THREE.MathUtils.clamp((-v.y * 0.5 + 0.5) * 100, 14, 84);
+
+    const popup: CombatDamagePopup = {
+      id: `dmg_${Date.now()}_${Math.random()}`,
+      value: Math.max(1, Math.round(amount)),
+      isShield,
+      isCritical: amount >= 35,
+      screenX: screenX + (Math.random() - 0.5) * 3,
+      screenY: screenY + (Math.random() - 0.5) * 2,
+      createdAt: this.matchTimeSec,
+    };
+
+    this.damagePopups = [...this.damagePopups.slice(-7), popup];
+  }
+
+  private fireProjectileFromOrigin(
+    actor: ContestantActor,
+    muzzleOrigin: THREE.Vector3,
+    baseDir: THREE.Vector3
+  ) {
+    actor.clipAmmo = Math.max(0, actor.clipAmmo - 1);
+    actor.fireCooldownTimer = actor.weapon.fireCooldown;
+    actor.rig.recoilTimer = 0.14;
+
+    // Broadcast combat sound position for AI awareness
+    this.lastCombatSoundPos = {
+      x: actor.x,
+      z: actor.z,
+      time: this.matchTimeSec,
+    };
+
+    if (actor.isPlayer) {
+      soundEngine.playWeaponFire(actor.weapon.id);
+      this.triggerCameraShake(0.08, 0.045);
+    }
+
+    // Muzzle flash pulse
+    this.spawnImpactBurst(
+      muzzleOrigin.x,
+      muzzleOrigin.y,
+      muzzleOrigin.z,
+      actor.weapon.projectileColor,
+      0.09
+    );
 
     const pellets = actor.weapon.pellets || 1;
+    let effectiveSpread = actor.weapon.spread;
+    if (actor.isPlayer && this.input.aiming) {
+      effectiveSpread *= 0.35;
+    } else if (!actor.isPlayer) {
+      // Scale AI spread by selected AI difficulty and movement
+      const diff = this.settings.aiDifficulty || 'NORMAL';
+      const diffSpreadMult =
+        diff === 'EASY' ? 2.4 : diff === 'HARD' ? 0.75 : 1.35;
+      effectiveSpread = Math.max(0.014, effectiveSpread) * diffSpreadMult;
+    }
+
     for (let p = 0; p < pellets; p++) {
-      const spreadX = (Math.random() - 0.5) * actor.weapon.spread * 2;
-      const spreadY = (Math.random() - 0.5) * actor.weapon.spread * 1.5;
-      const spreadZ = (Math.random() - 0.5) * actor.weapon.spread * 2;
+      const dir = baseDir.clone();
+      if (effectiveSpread > 0) {
+        const spreadX = (Math.random() - 0.5) * effectiveSpread * 2;
+        const spreadY = (Math.random() - 0.5) * effectiveSpread * 1.5;
+        const spreadZ = (Math.random() - 0.5) * effectiveSpread * 2;
+        dir.add(new THREE.Vector3(spreadX, spreadY, spreadZ)).normalize();
+      }
 
-      const dir = new THREE.Vector3(
-        forwardX + spreadX,
-        forwardY + spreadY,
-        forwardZ + spreadZ
-      ).normalize();
-
-      const boltGeo = new THREE.SphereGeometry(0.11, 6, 6);
-      const boltMat = new THREE.MeshBasicMaterial({
+      // Oriented 3D Energy Crossbow Bolt / Projectile Mesh (faces +Z)
+      const boltGroup = new THREE.Group();
+      const shaftGeo = new THREE.CylinderGeometry(0.036, 0.036, 0.58, 6);
+      shaftGeo.rotateX(Math.PI / 2);
+      const shaftMat = new THREE.MeshBasicMaterial({
         color: actor.weapon.projectileColor,
       });
-      const boltMesh = new THREE.Mesh(boltGeo, boltMat);
-      boltMesh.position.set(
-        actor.x + dir.x * 0.8,
-        muzzleY + dir.y * 0.8,
-        actor.z + dir.z * 0.8
+      const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
+
+      const tipGeo = new THREE.ConeGeometry(0.072, 0.2, 6);
+      tipGeo.rotateX(Math.PI / 2);
+      const tipMesh = new THREE.Mesh(tipGeo, shaftMat);
+      tipMesh.position.z = 0.3;
+
+      boltGroup.add(shaftMesh, tipMesh);
+      boltGroup.position.copy(muzzleOrigin);
+      boltGroup.lookAt(
+        muzzleOrigin.x + dir.x,
+        muzzleOrigin.y + dir.y,
+        muzzleOrigin.z + dir.z
       );
-      this.projectilesGroup.add(boltMesh);
+      this.projectilesGroup.add(boltGroup);
 
       this.projectiles.push({
-        mesh: boltMesh,
+        mesh: boltGroup,
         ownerId: actor.id,
         teamId: actor.teamId,
-        x: boltMesh.position.x,
-        y: boltMesh.position.y,
-        z: boltMesh.position.z,
+        x: muzzleOrigin.x,
+        y: muzzleOrigin.y,
+        z: muzzleOrigin.z,
         vx: dir.x * actor.weapon.projectileSpeed,
         vy: dir.y * actor.weapon.projectileSpeed,
         vz: dir.z * actor.weapon.projectileSpeed,
@@ -2107,6 +2771,16 @@ export class GameSimulationEngine {
         colliders
       );
       if (wallHit.hit) {
+        this.spawnImpactBurst(
+          wallHit.hitX,
+          wallHit.hitY,
+          wallHit.hitZ,
+          '#FDE047',
+          0.18
+        );
+        if (p.ownerId === 'player') {
+          soundEngine.playSurfaceImpact('wall');
+        }
         this.removeProjectileAt(i);
         continue;
       }
@@ -2116,11 +2790,30 @@ export class GameSimulationEngine {
         let hitTarget = false;
         for (const t of this.worldData.trainingTargets) {
           if (t.hit) continue;
-          const d = Math.hypot(nextX - t.x, nextY - t.y, nextZ - t.z);
-          if (d < 0.95) {
+          const segDx = nextX - p.x;
+          const segDy = nextY - p.y;
+          const segDz = nextZ - p.z;
+          const segLenSq = segDx * segDx + segDy * segDy + segDz * segDz || 1;
+          const u = THREE.MathUtils.clamp(
+            ((t.x - p.x) * segDx + (t.y - p.y) * segDy + (t.z - p.z) * segDz) /
+              segLenSq,
+            0,
+            1
+          );
+          const cx = p.x + u * segDx;
+          const cy = p.y + u * segDy;
+          const cz = p.z + u * segDz;
+          const d = Math.hypot(cx - t.x, cy - t.y, cz - t.z);
+          if (d < 0.98) {
             t.hit = true;
             t.mesh.visible = false;
             hitTarget = true;
+            this.spawnImpactBurst(t.x, t.y, t.z, '#00E5FF', 0.3);
+            this.spawnDamagePopup(t.x, t.y + 0.4, t.z, p.damage, false);
+            if (this.settings.hitMarkersEnabled) {
+              this.hitMarkerTimer = 0.22;
+              this.hitMarkerIsElim = true;
+            }
             soundEngine.playHitMarker(true);
             this.advanceTrainingTrial(3, 1);
             break;
@@ -2132,7 +2825,7 @@ export class GameSimulationEngine {
         }
       }
 
-      // 3. Check Actor Hit Detection
+      // 3. Check Actor Hit Detection (Continuous segment check)
       let hitActor = false;
       for (const actor of this.actors) {
         if (
@@ -2144,13 +2837,42 @@ export class GameSimulationEngine {
         }
         const actorCenterY =
           actor.y + (actor.stance === 'crouching' ? 0.65 : 0.95);
-        const horizDist = Math.hypot(nextX - actor.x, nextZ - actor.z);
-        const vertDist = Math.abs(nextY - actorCenterY);
+        const segDx = nextX - p.x;
+        const segDy = nextY - p.y;
+        const segDz = nextZ - p.z;
+        const segLenSq = segDx * segDx + segDy * segDy + segDz * segDz || 1;
+        const u = THREE.MathUtils.clamp(
+          ((actor.x - p.x) * segDx +
+            (actorCenterY - p.y) * segDy +
+            (actor.z - p.z) * segDz) /
+            segLenSq,
+          0,
+          1
+        );
+        const cx = p.x + u * segDx;
+        const cy = p.y + u * segDy;
+        const cz = p.z + u * segDz;
 
-        if (horizDist < 0.58 && vertDist < 0.95) {
+        const horizDist = Math.hypot(cx - actor.x, cz - actor.z);
+        const vertDist = Math.abs(cy - actorCenterY);
+
+        if (horizDist < 0.62 && vertDist < 0.98) {
           const attacker =
             this.actors.find((a) => a.id === p.ownerId) || null;
-          this.applyDamage(actor, p.damage, attacker, attacker?.weapon.shortName || 'Pulse');
+          const hadShield = actor.shield > 0;
+          this.spawnImpactBurst(
+            cx,
+            cy,
+            cz,
+            hadShield ? '#00E5FF' : '#FF6B1A',
+            0.24
+          );
+          this.applyDamage(
+            actor,
+            p.damage,
+            attacker,
+            attacker?.weapon.shortName || 'Crossbow'
+          );
           hitActor = true;
           break;
         }
@@ -2165,6 +2887,7 @@ export class GameSimulationEngine {
       p.y = nextY;
       p.z = nextZ;
       p.mesh.position.set(p.x, p.y, p.z);
+      p.mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
       p.remainingRange -= stepDist;
 
       if (p.remainingRange <= 0 || p.y < -2) {
@@ -2176,8 +2899,16 @@ export class GameSimulationEngine {
   private removeProjectileAt(index: number) {
     const p = this.projectiles[index];
     this.projectilesGroup.remove(p.mesh);
-    p.mesh.geometry.dispose();
-    (p.mesh.material as THREE.Material).dispose();
+    p.mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
     this.projectiles.splice(index, 1);
   }
 
@@ -2189,7 +2920,8 @@ export class GameSimulationEngine {
   ) {
     if (victim.eliminated) return;
 
-    victim.rig.hitFlashTimer = 0.15;
+    victim.rig.hitFlashTimer = 0.16;
+    const hadShield = victim.shield > 0;
     let remaining = amount;
 
     if (victim.shield > 0) {
@@ -2200,8 +2932,36 @@ export class GameSimulationEngine {
 
     victim.health = Math.max(0, victim.health - remaining);
 
+    // Alert AI victim to attacker's position so it reacts
+    if (!victim.isPlayer && attacker) {
+      victim.aiLastSeenEnemyPos = {
+        x: attacker.x,
+        z: attacker.z,
+        time: this.matchTimeSec,
+      };
+    }
+
+    if (victim.isPlayer) {
+      this.takingDamageFlashTimer = 0.25;
+      this.triggerCameraShake(0.14, 0.08);
+      soundEngine.playTakingDamage();
+    }
+
     if (attacker?.isPlayer) {
-      soundEngine.playHitMarker(victim.health <= 0);
+      const isElim = victim.health <= 0;
+      if (this.settings.hitMarkersEnabled) {
+        this.hitMarkerTimer = isElim ? 0.32 : 0.18;
+        this.hitMarkerIsElim = isElim;
+      }
+      this.spawnDamagePopup(
+        victim.x,
+        victim.y + 1.55,
+        victim.z,
+        amount,
+        hadShield
+      );
+      soundEngine.playHitMarker(isElim);
+      soundEngine.playSurfaceImpact(hadShield ? 'shield' : 'flesh');
     }
 
     if (victim.health <= 0) {
@@ -2243,6 +3003,9 @@ export class GameSimulationEngine {
     victim.aiState = 'Eliminated';
     victim.rig.root.visible = false;
 
+    // Subtle elimination burst effect (triggers once)
+    this.spawnImpactBurst(victim.x, victim.y + 1.0, victim.z, '#F43F5E', 0.42);
+
     if (attacker) {
       attacker.eliminations++;
     }
@@ -2257,7 +3020,6 @@ export class GameSimulationEngine {
     this.killFeed = [feedEntry, ...this.killFeed].slice(0, 4);
 
     if (victim.isPlayer && this.mode !== 'clash_arena') {
-      // Player eliminated in Battle Royale -> allow spectator or results
       const aliveOthers = this.actors.filter(
         (a) => !a.eliminated && !a.isPlayer
       );
@@ -2270,7 +3032,7 @@ export class GameSimulationEngine {
     }
   }
 
-  // 12-State AI Controller with Stuck Detection & Recovery
+  // Smarter 4-Role Tactical AI Controller with Vision, Sound Investigation, Cover & Difficulty Scaling
   private updateAIActor(
     bot: ContestantActor,
     dt: number,
@@ -2293,26 +3055,40 @@ export class GameSimulationEngine {
       bot.fireCooldownTimer = Math.max(0, bot.fireCooldownTimer - dt);
     }
 
-    // Periodic AI decision & stuck detection every ~0.35s
+    // Handle AI Reloading
+    if (bot.reloadTimer > 0) {
+      bot.reloadTimer -= dt;
+      if (bot.reloadTimer <= 0) {
+        bot.reloadTimer = 0;
+        bot.clipAmmo = bot.weapon.energyCapacity;
+      }
+    } else if (bot.clipAmmo <= 0) {
+      bot.reloadTimer = bot.weapon.reloadTime;
+      bot.rig.reloadAnimTimer = bot.weapon.reloadTime;
+    }
+
+    const diff = this.settings.aiDifficulty || 'NORMAL';
+    const thinkInterval =
+      diff === 'HARD' ? 0.24 : diff === 'EASY' ? 0.45 : 0.34;
+
+    // Periodic AI decision & stuck detection
     bot.aiThinkTimer -= dt;
     if (bot.aiThinkTimer <= 0) {
-      bot.aiThinkTimer = 0.32 + Math.random() * 0.15;
+      bot.aiThinkTimer = thinkInterval + Math.random() * 0.12;
 
-      // Stuck detection
       const movedDist = Math.hypot(
         bot.x - bot.aiLastCheckPos.x,
         bot.z - bot.aiLastCheckPos.z
       );
       bot.aiLastCheckPos = { x: bot.x, z: bot.z };
       if (
-        movedDist < 0.25 &&
+        movedDist < 0.22 &&
         bot.aiState !== 'Idle' &&
         bot.aiState !== 'ApproachingEncounter'
       ) {
-        bot.aiStuckTimer += 0.35;
-        if (bot.aiStuckTimer >= 1.2) {
+        bot.aiStuckTimer += thinkInterval;
+        if (bot.aiStuckTimer >= 1.1) {
           bot.aiStuckTimer = 0;
-          // Pick alternate waypoint to unstick
           const wps = this.worldData?.waypoints || [{ x: 0, z: 0 }];
           const wp = wps[Math.floor(Math.random() * wps.length)];
           bot.aiTargetPos = {
@@ -2325,18 +3101,20 @@ export class GameSimulationEngine {
       }
 
       // Self-heal if low health
-      if (bot.health < 45 && bot.medKits > 0) {
+      if (bot.health < 48 && bot.medKits > 0) {
         bot.medKits--;
         bot.health = Math.min(100, bot.health + 50);
+      } else if (bot.shield < 25 && bot.shieldCells > 0) {
+        bot.shieldCells--;
+        bot.shield = Math.min(bot.maxShield, bot.shield + 50);
       }
 
       this.evaluateAIStateTransitions(bot);
     }
 
-    // Execute state movement & combat
     const player = this.getPlayer();
 
-    // Check if assisting a downed squadmate
+    // 1. Assisting a downed squadmate (if safe)
     if (bot.aiState === 'AssistingTeammate') {
       const downedAlly = this.actors.find(
         (a) =>
@@ -2346,42 +3124,86 @@ export class GameSimulationEngine {
       );
       if (downedAlly) {
         bot.aiTargetPos = { x: downedAlly.x, z: downedAlly.z };
+        bot.aiTargetLabel = `Revive ${downedAlly.name}`;
         const d = Math.hypot(downedAlly.x - bot.x, downedAlly.z - bot.z);
         if (d < 2.6) {
           downedAlly.stance = 'standing';
           downedAlly.health = 50;
           downedAlly.downedTimer = 0;
-          bot.aiState = 'Following';
+          bot.aiState = bot.isSquadAlly ? 'Following' : 'Exploring';
           return;
         }
+        this.moveBotToward(bot, downedAlly.x, downedAlly.z, 6.8, dt);
+        return;
       } else {
         bot.aiState = bot.isSquadAlly ? 'Following' : 'Exploring';
       }
     }
 
-    // Look for nearest visible enemy
+    // 2. Retreating / Taking Cover when badly hurt
+    if (bot.aiState === 'Retreating') {
+      bot.stance = 'crouching';
+      this.moveBotToward(bot, bot.aiTargetPos.x, bot.aiTargetPos.z, 6.5, dt);
+      return;
+    } else {
+      bot.stance = 'standing';
+    }
+
+    // 3. Look for nearest visible enemy (respecting vision cone & walls)
     const enemy = this.findVisibleEnemyForBot(bot);
     if (enemy) {
+      bot.aiLastSeenEnemyPos = {
+        x: enemy.x,
+        z: enemy.z,
+        time: this.matchTimeSec,
+      };
+      bot.aiTargetLabel = enemy.name;
+
       const dx = enemy.x - bot.x;
       const dz = enemy.z - bot.z;
       const dist = Math.hypot(dx, dz);
       bot.yaw = Math.atan2(dx, dz);
 
-      if (dist <= bot.weapon.effectiveRange * 0.85) {
+      // Reaction delay before opening fire so bots feel fair on mobile
+      if (bot.aiReactionTimer > 0) {
+        bot.aiReactionTimer = Math.max(0, bot.aiReactionTimer - dt);
+      }
+
+      if (dist <= bot.weapon.effectiveRange * 0.9) {
         bot.animState = 'aiming';
-        if (bot.fireCooldownTimer <= 0) {
+        if (
+          bot.fireCooldownTimer <= 0 &&
+          bot.reloadTimer <= 0 &&
+          bot.aiReactionTimer <= 0
+        ) {
           const dy = enemy.y - bot.y;
           const pitch = Math.atan2(dy, dist);
           this.fireActorWeapon(bot, pitch);
-          // Add slight bot fire interval so combat feels fair on mobile
-          bot.fireCooldownTimer += 0.35 - bot.aiAccuracy * 0.18;
+          const diffDelay =
+            diff === 'EASY' ? 0.52 : diff === 'HARD' ? 0.16 : 0.32;
+          bot.fireCooldownTimer += diffDelay;
         }
-        // Strafe or close distance if far
-        if (dist > 22) {
-          this.moveBotToward(bot, enemy.x, enemy.z, 5.2, dt);
+
+        // Role-specific combat positioning
+        const preferredDist =
+          bot.role === 'Scout'
+            ? 34
+            : bot.role === 'Support'
+            ? 24
+            : bot.role === 'Defender'
+            ? 16
+            : 14;
+        if (dist > preferredDist + 4) {
+          this.moveBotToward(bot, enemy.x, enemy.z, 5.4, dt);
+        } else if (dist < preferredDist - 5 && bot.role === 'Scout') {
+          this.moveBotToward(bot, bot.x - dx, bot.z - dz, 4.8, dt);
         }
         return;
       }
+    } else {
+      // Reset reaction timer when no enemy is in sight
+      bot.aiReactionTimer =
+        diff === 'EASY' ? 0.45 : diff === 'HARD' ? 0.14 : 0.28;
     }
 
     if (bot.aiState === 'Idle') {
@@ -2389,17 +3211,44 @@ export class GameSimulationEngine {
       return;
     }
 
+    // 4. Squad Following with Role Spacing & Safe-Zone Protection
     if (bot.aiState === 'Following' && player && !player.eliminated) {
-      const dToPlayer = Math.hypot(player.x - bot.x, player.z - bot.z);
-      if (dToPlayer > 7.5) {
-        this.moveBotToward(bot, player.x, player.z, 7.2, dt);
+      const playerOutsideZone =
+        (this.mode === 'br_solo' || this.mode === 'br_squad') &&
+        Math.hypot(
+          player.x - this.zoneCenter.x,
+          player.z - this.zoneCenter.z
+        ) > this.zoneRadius;
+      if (playerOutsideZone) {
+        // Do not blindly follow leader into unsafe zone
+        bot.aiState = 'MovingToSafeZone';
+        bot.aiTargetPos = { ...this.zoneCenter };
+        return;
+      }
+
+      // Role formation offset so squadmates spread out naturally
+      const roleAngle =
+        bot.role === 'Assault'
+          ? 0.6
+          : bot.role === 'Support'
+          ? -0.6
+          : bot.role === 'Scout'
+          ? 1.4
+          : -1.4;
+      const formX = player.x - Math.sin(player.yaw + roleAngle) * 5.5;
+      const formZ = player.z - Math.cos(player.yaw + roleAngle) * 5.5;
+      bot.aiTargetLabel = `Leader (${bot.role})`;
+
+      const dToForm = Math.hypot(formX - bot.x, formZ - bot.z);
+      if (dToForm > 3.2) {
+        this.moveBotToward(bot, formX, formZ, 7.2, dt);
       } else {
         bot.animState = 'idle';
       }
       return;
     }
 
-    // Move toward current AI destination
+    // 5. Move toward current AI destination
     const dTarget = Math.hypot(
       bot.aiTargetPos.x - bot.x,
       bot.aiTargetPos.z - bot.z
@@ -2407,13 +3256,13 @@ export class GameSimulationEngine {
     if (dTarget > 2.2) {
       this.moveBotToward(bot, bot.aiTargetPos.x, bot.aiTargetPos.z, 6.2, dt);
     } else {
-      // Pick next waypoint
       const wps = this.worldData?.waypoints || [{ x: 0, z: 0 }];
       const wp = wps[Math.floor(Math.random() * wps.length)];
       bot.aiTargetPos = {
         x: wp.x + (Math.random() - 0.5) * 18,
         z: wp.z + (Math.random() - 0.5) * 18,
       };
+      bot.aiTargetLabel = 'Patrol Waypoint';
       bot.animState = 'idle';
     }
   }
@@ -2431,11 +3280,30 @@ export class GameSimulationEngine {
           x: this.zoneCenter.x + (Math.random() - 0.5) * 24,
           z: this.zoneCenter.z + (Math.random() - 0.5) * 24,
         };
+        bot.aiTargetLabel = 'Safe Zone';
         return;
       }
     }
 
-    // 2. Teammate assistance priority
+    // 2. Retreat to cover when critically low HP
+    if (bot.health < 32 && this.settings.aiDifficulty !== 'EASY') {
+      bot.aiState = 'Retreating';
+      const wps = this.worldData?.waypoints || [{ x: 0, z: 0 }];
+      let nearestWp = wps[0];
+      let bestD = 999;
+      for (const wp of wps) {
+        const d = Math.hypot(wp.x - bot.x, wp.z - bot.z);
+        if (d > 6 && d < bestD) {
+          bestD = d;
+          nearestWp = wp;
+        }
+      }
+      bot.aiTargetPos = { x: nearestWp.x, z: nearestWp.z };
+      bot.aiTargetLabel = 'Cover Retreat';
+      return;
+    }
+
+    // 3. Teammate assistance priority (only if safe — no enemy within 14m)
     const downedAlly = this.actors.find(
       (a) =>
         a.teamId === bot.teamId &&
@@ -2443,20 +3311,62 @@ export class GameSimulationEngine {
         a.stance === 'downed'
     );
     if (downedAlly) {
-      bot.aiState = 'AssistingTeammate';
-      bot.aiTargetPos = { x: downedAlly.x, z: downedAlly.z };
+      const nearbyEnemy = this.actors.some(
+        (e) =>
+          !e.eliminated &&
+          e.teamId !== bot.teamId &&
+          Math.hypot(e.x - downedAlly.x, e.z - downedAlly.z) < 14
+      );
+      if (!nearbyEnemy) {
+        bot.aiState = 'AssistingTeammate';
+        bot.aiTargetPos = { x: downedAlly.x, z: downedAlly.z };
+        return;
+      }
+    }
+
+    // 4. Search last seen enemy position or nearby combat gunfire sound
+    if (
+      bot.aiLastSeenEnemyPos &&
+      this.matchTimeSec - bot.aiLastSeenEnemyPos.time < 6.0
+    ) {
+      bot.aiState = 'Investigating';
+      bot.aiTargetPos = {
+        x: bot.aiLastSeenEnemyPos.x,
+        z: bot.aiLastSeenEnemyPos.z,
+      };
+      bot.aiTargetLabel = 'Last Seen Target';
       return;
     }
 
-    // 3. Respect Squad Command for player's allies
+    if (
+      !bot.isSquadAlly &&
+      this.lastCombatSoundPos &&
+      this.matchTimeSec - this.lastCombatSoundPos.time < 4.5 &&
+      Math.hypot(
+        this.lastCombatSoundPos.x - bot.x,
+        this.lastCombatSoundPos.z - bot.z
+      ) < 65
+    ) {
+      bot.aiState = 'Investigating';
+      bot.aiTargetPos = {
+        x: this.lastCombatSoundPos.x,
+        z: this.lastCombatSoundPos.z,
+      };
+      bot.aiTargetLabel = 'Combat Sound';
+      return;
+    }
+
+    // 5. Respect Squad Command for player's allies
     if (bot.isSquadAlly) {
       if (this.activeSquadCommand === 'hold') {
         bot.aiState = 'Idle';
+        bot.aiTargetLabel = 'Holding Position';
         return;
       }
       if (this.activeSquadCommand === 'move_marker' && this.squadMarker) {
         bot.aiState = 'MovingToDestination';
         bot.aiTargetPos = { ...this.squadMarker };
+        bot.aiTargetLabel = 'Squad Marker';
         return;
       }
       if (
@@ -2468,11 +3378,12 @@ export class GameSimulationEngine {
       }
     }
 
-    // 4. Nearby supply pickup
+    // 6. Nearby supply pickup
     const nearLoot = this.findNearestLoot(bot.x, bot.z, 12);
     if (nearLoot) {
       bot.aiState = 'CollectingSupplies';
       bot.aiTargetPos = { x: nearLoot.data.x, z: nearLoot.data.z };
+      bot.aiTargetLabel = nearLoot.data.name;
       if (Math.hypot(nearLoot.data.x - bot.x, nearLoot.data.z - bot.z) < 2.4) {
         this.applyLootToActor(bot, nearLoot.data);
         nearLoot.data.collected = true;
@@ -2485,9 +3396,13 @@ export class GameSimulationEngine {
   }
 
   private findVisibleEnemyForBot(bot: ContestantActor): ContestantActor | null {
+    const diff = this.settings.aiDifficulty || 'NORMAL';
     let closest: ContestantActor | null = null;
-    let closestDist = 58;
+    let closestDist = diff === 'HARD' ? 68 : diff === 'EASY' ? 44 : 56;
     const colliders = this.worldData?.colliders || [];
+
+    const forwardX = Math.sin(bot.yaw);
+    const forwardZ = Math.cos(bot.yaw);
 
     for (const other of this.actors) {
       if (
@@ -2497,8 +3412,19 @@ export class GameSimulationEngine {
       ) {
         continue;
       }
-      const d = Math.hypot(other.x - bot.x, other.z - bot.z);
-      if (d < closestDist) {
+      const dx = other.x - bot.x;
+      const dz = other.z - bot.z;
+      const d = Math.hypot(dx, dz);
+      if (d < closestDist && d > 0.1) {
+        // Vision cone check (140 deg forward cone unless target is very close <14m or recently seen)
+        const dot = (dx / d) * forwardX + (dz / d) * forwardZ;
+        const recentlyAlerted =
+          bot.aiLastSeenEnemyPos &&
+          this.matchTimeSec - bot.aiLastSeenEnemyPos.time < 4.0;
+        if (d > 14 && dot < -0.25 && !recentlyAlerted) {
+          continue;
+        }
+
         const los = castSegmentAgainstColliders(
           bot.x,
           bot.y + 1.3,
@@ -2524,13 +3450,31 @@ export class GameSimulationEngine {
     speed: number,
     dt: number
   ) {
-    const dx = tx - bot.x;
-    const dz = tz - bot.z;
+    let dx = tx - bot.x;
+    let dz = tz - bot.z;
     const dist = Math.hypot(dx, dz);
     if (dist < 0.1) return;
 
-    const dirX = dx / dist;
-    const dirZ = dz / dist;
+    // Teammate separation steering so bots never stack or block each other
+    for (const mate of this.actors) {
+      if (
+        mate.id !== bot.id &&
+        mate.teamId === bot.teamId &&
+        !mate.eliminated
+      ) {
+        const mdx = bot.x - mate.x;
+        const mdz = bot.z - mate.z;
+        const mDist = Math.hypot(mdx, mdz);
+        if (mDist > 0.05 && mDist < 2.2) {
+          dx += (mdx / mDist) * 2.5;
+          dz += (mdz / mDist) * 2.5;
+        }
+      }
+    }
+
+    const normLen = Math.hypot(dx, dz) || 1;
+    const dirX = dx / normLen;
+    const dirZ = dz / normLen;
     bot.yaw = Math.atan2(dirX, dirZ);
 
     const nextX = bot.x + dirX * speed * dt;
@@ -2545,11 +3489,10 @@ export class GameSimulationEngine {
     );
 
     if (resolved.hitWall) {
-      // Slide / steer around obstacle
       const perpX = -dirZ;
       const perpZ = dirX;
-      bot.x += perpX * speed * 0.7 * dt;
-      bot.z += perpZ * speed * 0.7 * dt;
+      bot.x += perpX * speed * 0.75 * dt;
+      bot.z += perpZ * speed * 0.75 * dt;
     } else {
       bot.x = resolved.x;
       bot.z = resolved.z;
@@ -2576,13 +3519,14 @@ export class GameSimulationEngine {
     if (!targetActor) return;
 
     const isAiming =
-      targetActor.isPlayer && this.input.aiming && !this.vehicleState.driverId;
-    const camDist =
-      this.vehicleState.driverId === 'player'
-        ? 7.8
-        : isAiming
-        ? 2.4
-        : 4.8;
+      targetActor.isPlayer &&
+      this.input.aiming &&
+      !this.activeDriverVehicleId;
+    const camDist = this.activeDriverVehicleId
+      ? 7.8
+      : isAiming
+      ? 2.4
+      : 4.8;
     const shoulderOffset = isAiming ? 0.55 : 0.35;
     const pivotHeight =
       targetActor.stance === 'crouching'
@@ -2618,6 +3562,11 @@ export class GameSimulationEngine {
 
     const groundAtCam = groundHeightAt(desiredCamX, desiredCamZ, this.mode);
     desiredCamY = Math.max(groundAtCam + 0.45, desiredCamY);
+
+    if (this.cameraShakeTimer > 0) {
+      desiredCamX += (Math.random() - 0.5) * this.cameraShakeIntensity;
+      desiredCamY += (Math.random() - 0.5) * this.cameraShakeIntensity;
+    }
 
     this.camera.position.x = THREE.MathUtils.damp(
       this.camera.position.x,
@@ -2863,6 +3812,7 @@ export class GameSimulationEngine {
       .map((a) => ({
         id: a.id,
         name: a.name,
+        role: a.role,
         isLeader: a.isPlayer,
         isPlayer: a.isPlayer,
         health: Math.round(a.health),
@@ -2870,7 +3820,7 @@ export class GameSimulationEngine {
         shield: Math.round(a.shield),
         maxShield: a.maxShield,
         stance: a.stance,
-        aiStateLabel: a.isPlayer ? 'Leader' : a.aiState,
+        aiStateLabel: a.isPlayer ? 'Leader' : `${a.role} · ${a.aiState}`,
         color: a.isPlayer ? '#FF6B1A' : '#00E5FF',
         x: a.x,
         z: a.z,
@@ -2884,15 +3834,39 @@ export class GameSimulationEngine {
         ? aliveBots[this.spectatingIndex % aliveBots.length]
         : null;
 
-    const nearVehicle =
-      Boolean(
-        player &&
-          this.vehicleState.exists &&
-          Math.hypot(
-            player.x - this.vehicleState.x,
-            player.z - this.vehicleState.z
-          ) <= 4.5
-      );
+    const nearestVeh = player
+      ? this.findNearestVehicle(player.x, player.z, 4.8)
+      : null;
+    const nearVehicle = Boolean(nearestVeh && !this.activeDriverVehicleId);
+    const activeVehObj = this.activeDriverVehicleId
+      ? this.vehicles.find((v) => v.id === this.activeDriverVehicleId) || null
+      : null;
+
+    const vehiclesOnMap: VehicleHUDInfo[] = this.vehicles.map((v) => ({
+      id: v.id,
+      type: v.type,
+      name: v.name,
+      x: v.x,
+      z: v.z,
+      health: Math.round(v.health),
+      maxHealth: v.maxHealth,
+      speedKmh: Math.round(Math.abs(v.speed) * 3.6),
+      disabled: v.disabled,
+    }));
+
+    const activeVehicle: VehicleHUDInfo | null = activeVehObj
+      ? {
+          id: activeVehObj.id,
+          type: activeVehObj.type,
+          name: activeVehObj.name,
+          x: activeVehObj.x,
+          z: activeVehObj.z,
+          health: Math.round(activeVehObj.health),
+          maxHealth: activeVehObj.maxHealth,
+          speedKmh: Math.round(Math.abs(activeVehObj.speed) * 3.6),
+          disabled: activeVehObj.disabled,
+        }
+      : null;
 
     const outsideZoneWarning = Boolean(
       player &&
@@ -2903,6 +3877,26 @@ export class GameSimulationEngine {
           player.z - this.zoneCenter.z
         ) > this.zoneRadius
     );
+
+    const aiDebugEntries = this.settings.showAiDebug
+      ? this.actors
+          .filter((a) => !a.isPlayer && !a.eliminated)
+          .slice(0, 8)
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            role: a.role,
+            state: a.aiState,
+            hp: Math.round(a.health + a.shield),
+            dist: Math.round(
+              Math.hypot(
+                a.x - (player?.x ?? 0),
+                a.z - (player?.z ?? 0)
+              )
+            ),
+            targetLabel: a.aiTargetLabel,
+          }))
+      : [];
 
     const snapshot: interfaceHUDStateSnapshot = {
       phase: this.phase,
@@ -2925,8 +3919,14 @@ export class GameSimulationEngine {
         player && player.reloadTimer > 0
           ? 1 - player.reloadTimer / player.weapon.reloadTime
           : 0,
-      inVehicle: this.vehicleState.driverId === 'player',
+      inVehicle: Boolean(this.activeDriverVehicleId),
       nearVehicle,
+      activeVehicle,
+      nearbyVehicleName: nearestVeh?.name || null,
+      hitMarkerActive: this.hitMarkerTimer > 0,
+      hitMarkerIsElim: this.hitMarkerIsElim,
+      takingDamageFlash: this.takingDamageFlashTimer > 0,
+      damagePopups: this.damagePopups,
       weapons: [player?.weapon || null, player?.secondaryWeapon || null],
       activeWeaponSlot: 0,
       currentClip: [
@@ -2968,9 +3968,11 @@ export class GameSimulationEngine {
           isAlly: a.teamId === 1,
           isDowned: a.stance === 'downed',
         })),
-      vehiclePos: this.vehicleState.exists
-        ? { x: this.vehicleState.x, z: this.vehicleState.z }
-        : null,
+      vehiclesOnMap,
+      vehiclePos:
+        this.vehicles.length > 0
+          ? { x: this.vehicles[0].x, z: this.vehicles[0].z }
+          : null,
       squadMarker: this.squadMarker ? { ...this.squadMarker } : null,
       squadMembers,
       activeSquadCommand: this.activeSquadCommand,
@@ -2989,6 +3991,7 @@ export class GameSimulationEngine {
         ...this.trainingState,
         currentTimerSec: Number(this.trainingState.currentTimerSec.toFixed(1)),
       },
+      aiDebugEntries,
       fps: Math.round(this.fpsSmooth),
       killFeed: this.killFeed,
     };

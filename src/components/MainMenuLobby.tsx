@@ -1,5 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  AIDifficulty,
+  CrosshairStyle,
   EQUIPMENT_CATALOG,
   GameMode,
   GameSettings,
@@ -9,6 +11,7 @@ import {
   SaveDataSchema,
   SUNSET_ISLAND_REGIONS,
 } from '../types/game';
+import { cloneDefaultHUDLayout } from '../services/storage';
 import { soundEngine } from '../services/audio';
 import {
   Award,
@@ -16,6 +19,7 @@ import {
   Compass,
   Crosshair,
   History,
+  Move,
   Play,
   RotateCcw,
   Settings,
@@ -42,6 +46,7 @@ interface MainMenuLobbyProps {
   onUpdateSaveData: (updater: (prev: SaveDataSchema) => SaveDataSchema) => void;
   onUpdateSettings: (nextSettings: GameSettings) => void;
   onResetAllData: () => void;
+  onOpenHudEditor: () => void;
 }
 
 export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
@@ -56,8 +61,12 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
   onUpdateSaveData,
   onUpdateSettings,
   onResetAllData,
+  onOpenHudEditor,
 }) => {
   const dragXRef = useRef<number | null>(null);
+  const [settingsTab, setSettingsTab] = useState<
+    'controls' | 'aim' | 'combat' | 'graphics' | 'audio'
+  >('controls');
 
   const xpIntoLevel = saveData.xp % 300;
   const xpPercent = Math.min(100, Math.round((xpIntoLevel / 300) * 100));
@@ -330,7 +339,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
 
         {/* SUB-SCREEN 1: CHARACTER OUTFIT CUSTOMIZATION */}
         {activeScreen === 'character' && (
-          <div className="pointer-events-auto flex-1 max-w-2xl mx-auto h-full max-h-[420px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto">
+          <div className="pointer-events-auto flex-1 max-w-2xl mx-auto h-full max-h-[420px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto custom-scroll">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div>
                 <h2 className="font-display text-lg font-bold text-white">
@@ -349,7 +358,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 my-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 my-3 overflow-y-auto custom-scroll pr-1">
               {OUTFIT_CATALOG.map((outfit) => {
                 const owned = saveData.ownedOutfits.includes(outfit.id);
                 const selected = saveData.selectedOutfitId === outfit.id;
@@ -401,7 +410,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
 
         {/* SUB-SCREEN 2: COLLECTION (BACKPACKS, VICTORY POSES, FRAMES & WEAPON CODEX) */}
         {activeScreen === 'collection' && (
-          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto">
+          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto custom-scroll">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div>
                 <h2 className="font-display text-lg font-bold text-white">
@@ -547,7 +556,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
 
         {/* SUB-SCREEN 3: PLAYER PROFILE & 8 ACHIEVEMENTS */}
         {activeScreen === 'achievements' && (
-          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto">
+          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto custom-scroll">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div>
                 <h2 className="font-display text-lg font-bold text-white">
@@ -589,7 +598,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
             </div>
 
             {/* 8 Achievements Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto custom-scroll pr-1">
               {saveData.achievements.map((ach) => {
                 const pct = Math.min(
                   100,
@@ -635,7 +644,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
 
         {/* SUB-SCREEN 4: MATCH HISTORY */}
         {activeScreen === 'history' && (
-          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto">
+          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/92 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto custom-scroll">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div>
                 <h2 className="font-display text-lg font-bold text-white">
@@ -654,7 +663,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto my-3 space-y-2 pr-1">
+            <div className="flex-1 overflow-y-auto custom-scroll my-3 space-y-2 pr-1">
               {saveData.matchHistory.length === 0 ? (
                 <div className="h-44 flex flex-col items-center justify-center text-center text-slate-400 text-xs">
                   <Trophy className="w-7 h-7 text-slate-600 mb-2" />
@@ -701,238 +710,687 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
           </div>
         )}
 
-        {/* SUB-SCREEN 5: SETTINGS & ACCESSIBILITY */}
+        {/* SUB-SCREEN 5: FULL SETTINGS & HUD CUSTOMIZATION */}
         {activeScreen === 'settings' && (
-          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[430px] bg-[#0B1320]/94 border border-white/15 rounded-2xl p-4 flex flex-col justify-between overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <div>
-                <h2 className="font-display text-lg font-bold text-white">
-                  Settings & Mobile Optimization
+          <div className="pointer-events-auto flex-1 max-w-3xl mx-auto h-full max-h-[450px] bg-[#0B1320]/95 border border-white/15 rounded-2xl p-3 sm:p-4 flex flex-col justify-between overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-2 shrink-0 gap-2">
+              <div className="min-w-0">
+                <h2 className="font-display text-sm sm:text-lg font-bold text-white truncate">
+                  Settings, HUD Layout & Tactical Controls
                 </h2>
-                <p className="text-xs text-slate-400">
-                  Configure graphics presets, touch sensitivity, audio channels,
-                  and save data.
+                <p className="text-[10px] sm:text-xs text-slate-400 truncate">
+                  Customize button layout, crossbow aiming, AI difficulty,
+                  graphics, and audio.
                 </p>
               </div>
-              <button
-                onClick={() => onSelectScreen('main')}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-200 hover:text-white cursor-pointer"
-              >
-                Done
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => {
+                    soundEngine.playClick();
+                    onOpenHudEditor();
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#FF6B1A] hover:bg-[#F97316] text-xs font-bold text-white flex items-center gap-1 cursor-pointer border border-[#FEF08A]"
+                >
+                  <Move className="w-3.5 h-3.5" />
+                  <span>Edit HUD Layout</span>
+                </button>
+                <button
+                  onClick={() => onSelectScreen('main')}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-200 hover:text-white cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-3 overflow-y-auto pr-1 text-xs">
-              {/* Graphics & Performance */}
-              <div className="space-y-3 bg-slate-900/80 border border-white/10 rounded-xl p-3">
-                <div className="font-bold text-white">
-                  Graphics Quality Preset
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsPreset[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => {
-                        soundEngine.playClick();
-                        onUpdateSettings({
-                          ...saveData.settings,
-                          graphicsPreset: p,
-                        });
-                      }}
-                      className={`py-2 rounded-lg font-bold cursor-pointer ${
-                        saveData.settings.graphicsPreset === p
-                          ? 'bg-[#FF6B1A] text-white'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
+            {/* Category Tab Strip */}
+            <div className="flex items-center gap-1.5 py-2 border-b border-white/10 overflow-x-auto custom-scroll shrink-0">
+              {(
+                [
+                  { id: 'controls', label: 'Controls & HUD' },
+                  { id: 'aim', label: 'Aim & Crossbow' },
+                  { id: 'combat', label: 'Combat & AI' },
+                  { id: 'graphics', label: 'Graphics' },
+                  { id: 'audio', label: 'Audio & Data' },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setSettingsTab(t.id);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap cursor-pointer ${
+                    settingsTab === t.id
+                      ? 'bg-[#00E5FF] text-slate-950'
+                      : 'bg-slate-900 text-slate-300 hover:text-white border border-white/10'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-                <label className="flex items-center justify-between pt-1 cursor-pointer">
-                  <span className="text-slate-300">Real-Time Shadows</span>
-                  <input
-                    type="checkbox"
-                    checked={saveData.settings.shadowsEnabled}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        shadowsEnabled: e.target.checked,
-                      })
-                    }
-                    className="w-4 h-4 accent-[#FF6B1A]"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-slate-300">Show FPS Counter</span>
-                  <input
-                    type="checkbox"
-                    checked={saveData.settings.showFps}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        showFps: e.target.checked,
-                      })
-                    }
-                    className="w-4 h-4 accent-[#FF6B1A]"
-                  />
-                </label>
-              </div>
-
-              {/* Camera & Touch Controls */}
-              <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
-                <div className="font-bold text-white">
-                  Touch & Camera Controls
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-300 mb-1">
-                    <span>Camera Sensitivity</span>
-                    <span className="font-mono-num">
-                      {Math.round(saveData.settings.cameraSensitivity * 100)}%
-                    </span>
+            {/* Scrollable Settings Body (Guaranteed vertical touch pan-y scrolling) */}
+            <div className="flex-1 overflow-y-auto custom-scroll py-2.5 pr-1 space-y-3 text-xs">
+              {settingsTab === 'controls' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white flex items-center justify-between">
+                      <span>Custom HUD Layout</span>
+                      <span className="text-[10px] text-[#00E5FF]">
+                        100% On-Screen Clamped
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Drag and drop any button (Fire, Aim, Joystick, Jump,
+                      Crouch, Prone, Reload, Heal, Interact), resize, change
+                      opacity, or hide optional buttons.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          onOpenHudEditor();
+                        }}
+                        className="flex-1 py-2 rounded-lg bg-[#FF6B1A] text-white font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Move className="w-3.5 h-3.5" />
+                        Customize HUD Buttons
+                      </button>
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            hudLayout: cloneDefaultHUDLayout(),
+                          });
+                        }}
+                        className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
+                      >
+                        Reset HUD
+                      </button>
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="0.4"
-                    max="2.0"
-                    step="0.1"
-                    value={saveData.settings.cameraSensitivity}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        cameraSensitivity: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full accent-[#00E5FF]"
-                  />
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-slate-300 mb-1">
-                    <span>Movement Sensitivity</span>
-                    <span className="font-mono-num">
-                      {Math.round(saveData.settings.movementSensitivity * 100)}%
-                    </span>
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Global HUD Scale & Sensitivity
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300 mb-1">
+                        <span>Global Button Scale</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.hudScale * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.75"
+                        max="1.25"
+                        step="0.05"
+                        value={saveData.settings.hudScale}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            hudScale: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#FF6B1A]"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300 mb-1">
+                        <span>Joystick Movement Sensitivity</span>
+                        <span className="font-mono-num">
+                          {Math.round(
+                            saveData.settings.movementSensitivity * 100
+                          )}
+                          %
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.8"
+                        step="0.1"
+                        value={saveData.settings.movementSensitivity}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            movementSensitivity: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#00E5FF]"
+                      />
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="1.8"
-                    step="0.1"
-                    value={saveData.settings.movementSensitivity}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        movementSensitivity: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full accent-[#00E5FF]"
-                  />
                 </div>
+              )}
 
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-slate-300">Invert Vertical Camera</span>
-                  <input
-                    type="checkbox"
-                    checked={saveData.settings.invertY}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        invertY: e.target.checked,
-                      })
-                    }
-                    className="w-4 h-4 accent-[#00E5FF]"
-                  />
-                </label>
-              </div>
+              {settingsTab === 'aim' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Crossbow & Camera Sensitivity
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300 mb-1">
+                        <span>Free-Look Camera Sensitivity</span>
+                        <span className="font-mono-num">
+                          {Math.round(
+                            saveData.settings.cameraSensitivity * 100
+                          )}
+                          %
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.4"
+                        max="2.0"
+                        step="0.1"
+                        value={saveData.settings.cameraSensitivity}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            cameraSensitivity: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#00E5FF]"
+                      />
+                    </div>
 
-              {/* Audio Volumes */}
-              <div className="space-y-2 bg-slate-900/80 border border-white/10 rounded-xl p-3">
-                <div className="font-bold text-white">Audio Channels</div>
-                <div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>Effects Volume</span>
-                    <span className="font-mono-num">
-                      {Math.round(saveData.settings.sfxVolume * 100)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={saveData.settings.sfxVolume}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        sfxVolume: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full accent-[#FF6B1A]"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>Music Volume</span>
-                    <span className="font-mono-num">
-                      {Math.round(saveData.settings.musicVolume * 100)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={saveData.settings.musicVolume}
-                    onChange={(e) =>
-                      onUpdateSettings({
-                        ...saveData.settings,
-                        musicVolume: parseFloat(e.target.value),
-                      })
-                    }
-                    className="w-full accent-[#FF6B1A]"
-                  />
-                </div>
-              </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300 mb-1">
+                        <span>Aim / Crossbow Scope Sensitivity</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.aimingSensitivity * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.3"
+                        max="1.8"
+                        step="0.1"
+                        value={saveData.settings.aimingSensitivity}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            aimingSensitivity: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#FF6B1A]"
+                      />
+                    </div>
 
-              {/* Data Management */}
-              <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3 flex flex-col justify-between">
-                <div>
-                  <div className="font-bold text-white">
-                    Local Save Management
+                    <label className="flex items-center justify-between cursor-pointer pt-1">
+                      <span className="text-slate-300">
+                        Invert Vertical Look (Y-Axis)
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.invertY}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            invertY: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#00E5FF]"
+                      />
+                    </label>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Clear match history or reset all progression to factory
-                    defaults.
-                  </p>
+
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Crosshair Style & Aim Behavior
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(
+                        [
+                          { id: 'classic_cross', label: 'Classic Cross' },
+                          { id: 'dot_ring', label: 'Dot & Ring' },
+                          { id: 'chevron', label: 'Crossbow Chevron' },
+                          { id: 'precision_box', label: 'Precision Box' },
+                        ] as { id: CrosshairStyle; label: string }[]
+                      ).map((ch) => (
+                        <button
+                          key={ch.id}
+                          onClick={() => {
+                            soundEngine.playClick();
+                            onUpdateSettings({
+                              ...saveData.settings,
+                              crosshairStyle: ch.id,
+                            });
+                          }}
+                          className={`py-1.5 px-2 rounded-lg font-semibold text-[11px] cursor-pointer ${
+                            saveData.settings.crosshairStyle === ch.id
+                              ? 'bg-[#FF6B1A] text-white'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {ch.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-slate-300">Aim Button Mode</span>
+                      <div className="flex gap-1">
+                        {(['toggle', 'hold'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() =>
+                              onUpdateSettings({
+                                ...saveData.settings,
+                                aimBehavior: mode,
+                              })
+                            }
+                            className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase cursor-pointer ${
+                              saveData.settings.aimBehavior === mode
+                                ? 'bg-[#00E5FF] text-slate-950'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-slate-300">
+                        Mobile Crossbow Aim Assist
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.aimAssist}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            aimAssist: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#00E5FF]"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-slate-300">
+                        3D Aim Raycast Debug Line
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.showAimDebug}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            showAimDebug: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#FDE047]"
+                      />
+                    </label>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      soundEngine.playClick();
-                      onUpdateSaveData((prev) => ({
-                        ...prev,
-                        matchHistory: [],
-                      }));
-                    }}
-                    className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
-                  >
-                    Clear History
-                  </button>
-                  <button
-                    onClick={() => {
-                      soundEngine.playClick();
-                      onResetAllData();
-                    }}
-                    className="flex-1 py-2 rounded-lg bg-rose-950/90 border border-rose-500/40 hover:bg-rose-900 text-rose-200 font-semibold flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Reset Save
-                  </button>
+              )}
+
+              {settingsTab === 'combat' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Tactical AI Difficulty & Roles
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Adjusts AI reaction speed, crossbow accuracy, cover usage,
+                      and squad coordination across Assault, Support, Scout, and
+                      Defender bots.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['EASY', 'NORMAL', 'HARD'] as AIDifficulty[]).map(
+                        (diff) => (
+                          <button
+                            key={diff}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              onUpdateSettings({
+                                ...saveData.settings,
+                                aiDifficulty: diff,
+                              });
+                            }}
+                            className={`py-2 rounded-lg font-bold cursor-pointer ${
+                              saveData.settings.aiDifficulty === diff
+                                ? 'bg-[#FF6B1A] text-white'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {diff}
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <label className="flex items-center justify-between cursor-pointer pt-1">
+                      <span className="text-slate-300">
+                        Show AI Role & State Telemetry
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.showAiDebug}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            showAiDebug: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#00E5FF]"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Combat Feel & Visual Feedback
+                    </div>
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-slate-300">
+                        Crosshair Hit Markers
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.hitMarkersEnabled}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            hitMarkersEnabled: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#FF6B1A]"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-slate-300">
+                        Floating Damage Numbers
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.damageNumbersEnabled}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            damageNumbersEnabled: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#FF6B1A]"
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300">Camera Recoil Shake</span>
+                      <div className="flex gap-1">
+                        {(['off', 'low', 'high'] as const).map((lvl) => (
+                          <button
+                            key={lvl}
+                            onClick={() =>
+                              onUpdateSettings({
+                                ...saveData.settings,
+                                cameraShake: lvl,
+                              })
+                            }
+                            className={`px-2 py-1 rounded text-[10px] font-bold uppercase cursor-pointer ${
+                              saveData.settings.cameraShake === lvl
+                                ? 'bg-[#00E5FF] text-slate-950'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {lvl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-300">3D Impact Effects</span>
+                      <div className="flex gap-1">
+                        {(['low', 'medium', 'high'] as const).map((fx) => (
+                          <button
+                            key={fx}
+                            onClick={() =>
+                              onUpdateSettings({
+                                ...saveData.settings,
+                                combatEffects: fx,
+                              })
+                            }
+                            className={`px-2 py-1 rounded text-[10px] font-bold uppercase cursor-pointer ${
+                              saveData.settings.combatEffects === fx
+                                ? 'bg-[#FF6B1A] text-white'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {fx}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {settingsTab === 'graphics' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-3 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Graphics Quality Preset
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['LOW', 'MEDIUM', 'HIGH'] as GraphicsPreset[]).map(
+                        (p) => (
+                          <button
+                            key={p}
+                            onClick={() => {
+                              soundEngine.playClick();
+                              onUpdateSettings({
+                                ...saveData.settings,
+                                graphicsPreset: p,
+                              });
+                            }}
+                            className={`py-2 rounded-lg font-bold cursor-pointer ${
+                              saveData.settings.graphicsPreset === p
+                                ? 'bg-[#FF6B1A] text-white'
+                                : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <label className="flex items-center justify-between pt-1 cursor-pointer">
+                      <span className="text-slate-300">Real-Time Shadows</span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.shadowsEnabled}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            shadowsEnabled: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#FF6B1A]"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-slate-300">Show FPS Counter</span>
+                      <input
+                        type="checkbox"
+                        checked={saveData.settings.showFps}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            showFps: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 accent-[#FF6B1A]"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="bg-slate-900/80 border border-white/10 rounded-xl p-3 flex flex-col justify-between">
+                    <div>
+                      <div className="font-bold text-white">
+                        Mobile GPU Optimization
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        LOW preset uses 1.0x pixel ratio for maximum battery and
+                        60 FPS stability. HIGH enables up to 1.75x pixel ratio
+                        and directional shadows.
+                      </p>
+                    </div>
+                    <div className="text-[11px] font-mono-num text-emerald-400 mt-2">
+                      Current Viewport FPS: {fps} FPS
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'audio' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2 bg-slate-900/80 border border-white/10 rounded-xl p-3">
+                    <div className="font-bold text-white">
+                      Synthesized Audio Channels
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Master Volume</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.masterVolume * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={saveData.settings.masterVolume}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            masterVolume: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#00E5FF]"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Combat SFX Volume</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.sfxVolume * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={saveData.settings.sfxVolume}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            sfxVolume: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#FF6B1A]"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Music & Victory Fanfare</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.musicVolume * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={saveData.settings.musicVolume}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            musicVolume: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#FF6B1A]"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-slate-300">
+                        <span>Ambient & Vehicle Engine</span>
+                        <span className="font-mono-num">
+                          {Math.round(saveData.settings.ambientVolume * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={saveData.settings.ambientVolume}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...saveData.settings,
+                            ambientVolume: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full accent-[#00E5FF]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Data Management */}
+                  <div className="space-y-2.5 bg-slate-900/80 border border-white/10 rounded-xl p-3 flex flex-col justify-between">
+                    <div>
+                      <div className="font-bold text-white">
+                        Local Save Management
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Clear match history or reset all progression and custom
+                        HUD layouts to factory defaults.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          onUpdateSaveData((prev) => ({
+                            ...prev,
+                            matchHistory: [],
+                          }));
+                        }}
+                        className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer"
+                      >
+                        Clear History
+                      </button>
+                      <button
+                        onClick={() => {
+                          soundEngine.playClick();
+                          onResetAllData();
+                        }}
+                        className="flex-1 py-2 rounded-lg bg-rose-950/90 border border-rose-500/40 hover:bg-rose-900 text-rose-200 font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Reset Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
