@@ -30,15 +30,15 @@ export const PWAInstallButton: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
       {/* Android 15 Fullscreen & Landscape Lock Button */}
       <button
         onClick={toggleAndroidFullscreenLandscape}
         title="Fullscreen Landscape Mode"
-        className="min-h-[40px] px-2.5 py-1.5 rounded-lg bg-slate-800/90 border border-white/15 hover:border-[#00E5FF] text-xs font-semibold text-[#00E5FF] flex items-center gap-1.5 cursor-pointer"
+        className="w-8 h-8 sm:w-auto sm:h-9 sm:px-2.5 rounded-lg bg-slate-800/90 border border-white/15 hover:border-[#00E5FF] text-xs font-semibold text-[#00E5FF] flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
       >
-        <Maximize2 className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">
+        <Maximize2 className="w-3.5 h-3.5 shrink-0" />
+        <span className="hidden lg:inline">
           {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         </span>
       </button>
@@ -50,10 +50,10 @@ export const PWAInstallButton: React.FC = () => {
             soundEngine.playClick();
             install();
           }}
-          className="min-h-[40px] px-3 py-1.5 rounded-lg bg-[#00E5FF] hover:bg-cyan-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+          className="h-8 sm:h-9 px-2 sm:px-2.5 rounded-lg bg-[#00E5FF] hover:bg-cyan-300 text-slate-950 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1 cursor-pointer shrink-0"
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Install App</span>
+          <Download className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Install</span>
         </button>
       )}
 
@@ -64,10 +64,11 @@ export const PWAInstallButton: React.FC = () => {
             soundEngine.playClick();
             setShowGuideModal(true);
           }}
-          className="min-h-[40px] px-2.5 py-1.5 rounded-lg bg-slate-800/90 border border-[#FF6B1A]/60 hover:border-[#FF6B1A] text-xs font-semibold text-[#FDE047] flex items-center gap-1.5 cursor-pointer"
+          title="Phone & GitHub Guide"
+          className="w-8 h-8 sm:w-auto sm:h-9 sm:px-2.5 rounded-lg bg-slate-800/90 border border-[#FF6B1A]/60 hover:border-[#FF6B1A] text-xs font-semibold text-[#FDE047] flex items-center justify-center gap-1 cursor-pointer shrink-0"
         >
-          <Smartphone className="w-3.5 h-3.5" />
-          <span>{isIOS ? 'Install on iOS' : 'Phone & GitHub Guide'}</span>
+          <Smartphone className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline">{isIOS ? 'iOS' : 'Guide'}</span>
         </button>
       )}
 

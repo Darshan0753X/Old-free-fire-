@@ -89,24 +89,24 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
   ).length;
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-5">
+    <div className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between safe-viewport-pad w-full h-full max-w-full max-h-full overflow-hidden gap-1.5 sm:gap-2">
       {/* TOP BAR CONTRACT: Brand Emblem — Navigation Links — Profile & Settings */}
-      <header className="pointer-events-auto flex items-center justify-between gap-4 bg-[#0B1320]/88 border border-white/15 rounded-xl px-4 py-2.5">
+      <header className="pointer-events-auto flex items-center justify-between gap-1.5 sm:gap-3 bg-[#0B1320]/90 border border-white/15 rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2 shrink-0 w-full min-w-0">
         {/* Zone 1: Original Classic Drop Logo Lockup */}
         <button
           onClick={() => {
             soundEngine.playClick();
             onSelectScreen('main');
           }}
-          className="flex items-center gap-2.5 text-left whitespace-nowrap shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 sm:gap-2.5 text-left whitespace-nowrap shrink-0 cursor-pointer min-w-0"
         >
           <svg
-            width="34"
-            height="34"
+            width="28"
+            height="28"
             viewBox="0 0 36 36"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            className="shrink-0"
+            className="shrink-0 sm:w-[34px] sm:h-[34px]"
           >
             <rect
               x="2"
@@ -130,18 +130,18 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               strokeLinejoin="round"
             />
           </svg>
-          <div>
-            <span className="font-display text-lg sm:text-xl font-bold tracking-wider text-white block leading-none">
+          <div className="min-w-0">
+            <span className="font-display text-sm sm:text-xl font-bold tracking-wider text-white block leading-none truncate">
               CLASSIC DROP
             </span>
-            <span className="text-[10px] font-semibold text-[#FDE047] tracking-widest block mt-0.5">
-              V2 NOSTALGIA EDITION
+            <span className="text-[8px] sm:text-[10px] font-semibold text-[#FDE047] tracking-widest block mt-0.5 truncate">
+              V2 NOSTALGIA
             </span>
           </div>
         </button>
 
-        {/* Zone 2: Clean Single-Line Navigation Tabs */}
-        <nav className="hidden md:flex items-center gap-2">
+        {/* Zone 2: Clean Single-Line Navigation Tabs (Desktop/Tablet) */}
+        <nav className="hidden md:flex items-center gap-1.5 min-w-0 overflow-x-auto">
           {(
             [
               { id: 'main', label: 'Lobby', icon: Compass },
@@ -164,7 +164,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
                   soundEngine.playClick();
                   onSelectScreen(tab.id);
                 }}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   active
                     ? 'bg-[#FF6B1A] text-white'
                     : 'text-slate-300 hover:text-white hover:bg-white/10'
@@ -178,7 +178,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
         </nav>
 
         {/* Zone 3: Player Profile Card, PWA Install / Fullscreen & Settings Trigger */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <PWAInstallButton />
 
           <div
@@ -186,18 +186,18 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               soundEngine.playClick();
               onSelectScreen('achievements');
             }}
-            className="flex items-center gap-2.5 bg-slate-900/90 border border-white/10 rounded-lg px-2.5 py-1.5 cursor-pointer hover:border-white/25"
+            className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 border border-white/10 rounded-lg px-1.5 py-1 sm:px-2.5 sm:py-1.5 cursor-pointer hover:border-white/25 shrink-0"
           >
             <div
-              className={`w-8 h-8 rounded-md bg-slate-800 border-2 ${frameBorderColor} flex items-center justify-center font-display font-bold text-xs text-[#FDE047]`}
+              className={`w-6 h-6 sm:w-8 sm:h-8 rounded-md bg-slate-800 border-2 ${frameBorderColor} flex items-center justify-center font-display font-bold text-[10px] sm:text-xs text-[#FDE047]`}
             >
               LV.{saveData.level}
             </div>
-            <div className="hidden sm:block">
+            <div className="hidden lg:block">
               <div className="text-xs font-bold text-white leading-tight">
                 {saveData.playerName}
               </div>
-              <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1">
+              <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1">
                 <div
                   className="h-full bg-[#00E5FF]"
                   style={{ width: `${xpPercent}%` }}
@@ -207,7 +207,7 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
           </div>
 
           {saveData.settings.showFps && (
-            <span className="hidden lg:inline-block font-mono-num text-xs text-emerald-400">
+            <span className="hidden xl:inline-block font-mono-num text-xs text-emerald-400">
               {fps} FPS
             </span>
           )}
@@ -221,12 +221,12 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               });
             }}
             aria-label="Toggle Mute"
-            className="min-w-[40px] min-h-[40px] rounded-lg bg-slate-800/90 border border-white/15 flex items-center justify-center text-slate-200 hover:text-white cursor-pointer"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-800/90 border border-white/15 flex items-center justify-center text-slate-200 hover:text-white cursor-pointer shrink-0"
           >
             {saveData.settings.muted ? (
-              <VolumeX className="w-4 h-4 text-rose-400" />
+              <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
             ) : (
-              <Volume2 className="w-4 h-4 text-[#00E5FF]" />
+              <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00E5FF]" />
             )}
           </button>
 
@@ -236,52 +236,52 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
               onSelectScreen(activeScreen === 'settings' ? 'main' : 'settings');
             }}
             aria-label="Settings"
-            className={`min-w-[40px] min-h-[40px] rounded-lg border flex items-center justify-center cursor-pointer transition-colors ${
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
               activeScreen === 'settings'
                 ? 'bg-[#FF6B1A] border-[#FEF08A] text-white'
                 : 'bg-slate-800/90 border-white/15 text-slate-200 hover:text-white'
             }`}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </header>
 
-      {/* CENTER WORKSPACE: Interactive 3D Character Turntable OR Active Sub-Screen */}
-      <div className="flex-1 flex items-center justify-between relative my-2 overflow-hidden">
-        {/* Mobile Left Quick-Nav Rail */}
-        <div className="pointer-events-auto flex md:hidden flex-col gap-1.5 bg-[#0B1320]/88 border border-white/15 rounded-xl p-1.5 z-10">
-          {(
-            [
-              { id: 'main', label: 'Lobby', icon: Compass },
-              { id: 'character', label: 'Outfits', icon: Shirt },
-              { id: 'collection', label: 'Gear', icon: Sliders },
-              { id: 'achievements', label: 'Profile', icon: Award },
-              { id: 'history', label: 'History', icon: History },
-            ] as const
-          ).map((tab) => {
-            const Icon = tab.icon;
-            const active = activeScreen === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  soundEngine.playClick();
-                  onSelectScreen(tab.id);
-                }}
-                className={`px-2.5 py-2 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer ${
-                  active
-                    ? 'bg-[#FF6B1A] text-white'
-                    : 'text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+      {/* Mobile Compact Horizontal Quick-Nav Bar (Fits 100% inside narrow screens) */}
+      <div className="pointer-events-auto grid grid-cols-5 md:hidden gap-1 bg-[#0B1320]/90 border border-white/15 rounded-xl p-1 shrink-0 w-full">
+        {(
+          [
+            { id: 'main', label: 'Lobby', icon: Compass },
+            { id: 'character', label: 'Outfits', icon: Shirt },
+            { id: 'collection', label: 'Gear', icon: Sliders },
+            { id: 'achievements', label: 'Profile', icon: Award },
+            { id: 'history', label: 'History', icon: History },
+          ] as const
+        ).map((tab) => {
+          const Icon = tab.icon;
+          const active = activeScreen === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                soundEngine.playClick();
+                onSelectScreen(tab.id);
+              }}
+              className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer truncate ${
+                active
+                  ? 'bg-[#FF6B1A] text-white'
+                  : 'text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              <Icon className="w-3 h-3 shrink-0" />
+              <span className="truncate">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
+      {/* CENTER WORKSPACE: Interactive 3D Character Turntable OR Active Sub-Screen */}
+      <div className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden w-full">
         {/* Interactive Turntable Drag Zone when on Main Lobby */}
         {activeScreen === 'main' && (
           <div
@@ -289,9 +289,9 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
             onPointerMove={handleTurntablePointerMove}
             onPointerUp={handleTurntablePointerUp}
             onPointerCancel={handleTurntablePointerUp}
-            className="pointer-events-auto flex-1 h-full flex flex-col justify-between items-center py-2 cursor-grab active:cursor-grabbing"
+            className="pointer-events-auto flex-1 h-full flex flex-col justify-between items-center py-1 cursor-grab active:cursor-grabbing"
           >
-            <div className="bg-[#0B1320]/75 border border-white/15 rounded-lg px-3 py-1 text-xs text-slate-200">
+            <div className="bg-[#0B1320]/75 border border-white/15 rounded-lg px-2.5 py-1 text-[10px] sm:text-xs text-slate-200 text-center max-w-[95%] truncate">
               Drag horizontally to rotate character · Sunset Island (10 Regions)
             </div>
 
@@ -939,33 +939,33 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
       </div>
 
       {/* BOTTOM ACTION DOCK: Mode Selector & Prominent PLAY CTA */}
-      <footer className="pointer-events-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0B1320]/90 border border-white/15 rounded-2xl p-3">
+      <footer className="pointer-events-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-3 bg-[#0B1320]/92 border border-white/15 rounded-xl sm:rounded-2xl p-2 sm:p-3 shrink-0 w-full min-w-0">
         {/* 4 Playable Modes Selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 flex-1 min-w-0">
           {(
             [
               {
                 id: 'br_solo',
-                title: 'Battle Royale Solo',
-                sub: 'Sunset Island · 20 Contestants',
+                title: 'BR Solo',
+                sub: 'Sunset Island · 20',
                 icon: User,
               },
               {
                 id: 'br_squad',
-                title: 'Battle Royale Squad',
-                sub: '4-Player AI Team & Commands',
+                title: 'BR Squad',
+                sub: '4-Player AI Team',
                 icon: Users,
               },
               {
                 id: 'clash_arena',
-                title: 'Clash Arena (4v4)',
-                sub: 'Sunset Yard · Best of 5 Rounds',
+                title: 'Clash Arena',
+                sub: '4v4 Best of 5',
                 icon: Shield,
               },
               {
                 id: 'training',
-                title: 'Training Grounds',
-                sub: '5 Guided Practice Trials',
+                title: 'Training',
+                sub: '5 Guided Trials',
                 icon: Crosshair,
               },
             ] as const
@@ -979,23 +979,23 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
                   soundEngine.playClick();
                   onSelectMode(m.id);
                 }}
-                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl border text-left transition-all cursor-pointer min-w-0 ${
                   active
                     ? 'bg-slate-800 border-[#FF6B1A]'
                     : 'bg-slate-900/75 border-white/10 hover:border-white/25'
                 }`}
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
                   <Icon
-                    className={`w-4 h-4 shrink-0 ${
+                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
                       active ? 'text-[#FF6B1A]' : 'text-slate-400'
                     }`}
                   />
-                  <span className="text-xs font-bold text-white truncate">
+                  <span className="text-[11px] sm:text-xs font-bold text-white truncate">
                     {m.title}
                   </span>
                 </div>
-                <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                <div className="hidden sm:block text-[10px] text-slate-400 truncate mt-0.5">
                   {m.sub}
                 </div>
               </button>
@@ -1009,9 +1009,9 @@ export const MainMenuLobby: React.FC<MainMenuLobbyProps> = ({
             soundEngine.playClick();
             onStartMatch();
           }}
-          className="px-7 py-3.5 rounded-xl bg-[#FF6B1A] hover:bg-[#F97316] active:scale-[0.98] text-white font-display font-bold text-lg tracking-wider flex items-center justify-center gap-2.5 shrink-0 cursor-pointer border-2 border-[#FEF08A]"
+          className="px-5 py-2 sm:px-7 sm:py-3.5 rounded-xl bg-[#FF6B1A] hover:bg-[#F97316] active:scale-[0.98] text-white font-display font-bold text-sm sm:text-lg tracking-wider flex items-center justify-center gap-2 shrink-0 cursor-pointer border-2 border-[#FEF08A]"
         >
-          <Play className="w-5 h-5 fill-current" />
+          <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
           <span>PLAY</span>
         </button>
       </footer>

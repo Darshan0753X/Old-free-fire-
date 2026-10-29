@@ -241,7 +241,8 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
 
   const updateJoystickFromPoint = (clientX: number, clientY: number) => {
     if (!engine) return;
-    const maxRadius = 46;
+    const containerW = joystickContainerRef.current?.clientWidth ?? 96;
+    const maxRadius = Math.max(28, containerW * 0.36);
     const dx = clientX - moveOriginRef.current.x;
     const dy = clientY - moveOriginRef.current.y;
     const dist = Math.hypot(dx, dy);
@@ -299,11 +300,80 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
 
   const activeWeapon = hud.weapons[0];
 
+  const renderVitalsAndWeapons = () => (
+    <>
+      {/* Vitals Bars */}
+      <div className="w-full bg-[#0B1320]/88 border border-white/15 rounded-xl p-1.5 sm:p-2 space-y-1">
+        <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono-num">
+          <span className="text-cyan-300 font-bold truncate">
+            SHIELD LV.{hud.armorLevel}: {hud.shield}
+          </span>
+          <span className="text-white font-bold ml-2 shrink-0">
+            HP: {hud.health}/{hud.maxHealth}
+          </span>
+        </div>
+        {/* Shield Bar */}
+        <div className="w-full h-1.5 sm:h-2 bg-slate-900 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#00E5FF] transition-all"
+            style={{ width: `${(hud.shield / hud.maxShield) * 100}%` }}
+          />
+        </div>
+        {/* Health Bar */}
+        <div className="w-full h-2 sm:h-2.5 bg-slate-900 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all ${
+              hud.health > 35 ? 'bg-emerald-400' : 'bg-rose-500'
+            }`}
+            style={{ width: `${(hud.health / hud.maxHealth) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Weapon Slots & Temporary Cover Button */}
+      <div className="flex items-center gap-1.5 w-full min-w-0">
+        <button
+          onClick={() => engine?.switchWeaponSlot(0)}
+          className="flex-1 min-w-0 bg-[#0B1320]/90 border-2 border-[#FF6B1A] rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-left cursor-pointer"
+        >
+          <div className="flex items-center justify-between gap-1 min-w-0">
+            <span className="text-[11px] sm:text-xs font-bold text-white truncate">
+              {activeWeapon ? activeWeapon.shortName : 'Unarmed'}
+            </span>
+            <span className="font-mono-num text-[10px] sm:text-xs font-bold text-[#FDE047] shrink-0">
+              {hud.isReloading
+                ? 'RECHRG'
+                : `${hud.currentClip[0]}/${hud.reserveAmmo}`}
+            </span>
+          </div>
+        </button>
+
+        {hud.weapons[1] && (
+          <button
+            onClick={() => engine?.switchWeaponSlot(1)}
+            className="bg-[#0B1320]/82 border border-white/20 rounded-xl px-2 py-1.5 sm:px-2.5 sm:py-2 text-left cursor-pointer shrink-0 max-w-[95px] sm:max-w-[120px]"
+          >
+            <div className="text-[10px] sm:text-xs font-semibold text-slate-300 truncate">
+              {hud.weapons[1].shortName}
+            </div>
+          </button>
+        )}
+
+        {hud.coverGadgets > 0 && (
+          <button
+            onClick={() => engine?.deployTemporaryCover()}
+            className="h-8 sm:h-10 px-2 sm:px-2.5 rounded-xl bg-cyan-950/90 border border-[#00E5FF] text-[10px] sm:text-xs font-bold text-[#00E5FF] flex items-center gap-1 shrink-0 cursor-pointer"
+          >
+            <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+            <span>{hud.coverGadgets}</span>
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <div
-      className="fixed inset-0 z-20 pointer-events-none select-none overflow-hidden flex flex-col justify-between"
-      style={{ transform: `scale(${hudScale})`, transformOrigin: 'center' }}
-    >
+    <div className="fixed inset-0 z-20 pointer-events-none select-none overflow-hidden flex flex-col justify-between safe-viewport-pad w-full h-full max-w-full max-h-full">
       {/* RIGHT-HALF TOUCH-LOOK CAMERA REGION (Behind HUD buttons) */}
       <div
         onTouchStart={handleLookTouchStart}
@@ -328,53 +398,53 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
         )}
 
       {/* TOP REGION: MINIMAP (TOP-LEFT), MATCH STATUS BAR (TOP-CENTER), SQUAD & PAUSE (TOP-RIGHT) */}
-      <div className="relative z-10 flex items-start justify-between p-2.5 sm:p-3.5 gap-2">
+      <div className="relative z-10 flex items-start justify-between gap-1.5 sm:gap-2 w-full min-w-0">
         {/* Top-Left: 2D Minimap + Squad Panel */}
-        <div className="flex items-start gap-2.5">
-          <div className="pointer-events-auto bg-[#0B1320]/85 border border-white/20 rounded-xl p-1.5">
+        <div className="flex flex-col sm:flex-row items-start gap-1.5 sm:gap-2 shrink-0">
+          <div className="pointer-events-auto bg-[#0B1320]/85 border border-white/20 rounded-xl p-1 sm:p-1.5">
             <canvas
               ref={minimapCanvasRef}
               width={112}
               height={112}
               onClick={handleMinimapClick}
-              className="rounded-lg cursor-crosshair block"
+              className="w-[70px] h-[70px] sm:w-[100px] sm:h-[100px] rounded-lg cursor-crosshair block"
             />
-            <div className="text-[10px] font-semibold text-center text-slate-200 mt-1 truncate max-w-[112px]">
+            <div className="text-[9px] sm:text-[10px] font-semibold text-center text-slate-200 mt-0.5 truncate max-w-[70px] sm:max-w-[100px]">
               {hud.currentRegionName}
             </div>
           </div>
 
           {/* Squad Member Status & 5-Command Drawer (Squad BR or Clash Arena) */}
           {(hud.mode === 'br_squad' || hud.mode === 'clash_arena') && (
-            <div className="pointer-events-auto bg-[#0B1320]/82 border border-white/15 rounded-xl p-2 min-w-[145px]">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold text-[#00E5FF] flex items-center gap-1">
-                  <Users className="w-3 h-3" /> SQUAD STATUS
+            <div className="pointer-events-auto bg-[#0B1320]/85 border border-white/15 rounded-xl p-1.5 sm:p-2 min-w-[115px] sm:min-w-[140px] max-w-[135px] sm:max-w-[160px]">
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <span className="text-[9px] sm:text-[10px] font-bold text-[#00E5FF] flex items-center gap-1 truncate">
+                  <Users className="w-3 h-3 shrink-0" /> SQUAD
                 </span>
                 <button
                   onClick={() => {
                     soundEngine.playClick();
                     setSquadDrawerOpen((v) => !v);
                   }}
-                  className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-[#FDE047] cursor-pointer"
+                  className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] sm:text-[10px] font-bold text-[#FDE047] cursor-pointer shrink-0"
                 >
-                  {squadDrawerOpen ? 'Hide Cmds' : 'Commands'}
+                  {squadDrawerOpen ? 'Hide' : 'Cmds'}
                 </button>
               </div>
 
               <div className="space-y-1">
                 {hud.squadMembers.map((m) => (
-                  <div key={m.id} className="text-[10px]">
-                    <div className="flex items-center justify-between text-slate-200">
-                      <span className="truncate max-w-[85px] font-semibold">
+                  <div key={m.id} className="text-[9px] sm:text-[10px]">
+                    <div className="flex items-center justify-between text-slate-200 gap-1">
+                      <span className="truncate max-w-[65px] sm:max-w-[85px] font-semibold">
                         {m.isLeader ? '★ ' : ''}
                         {m.name}
                       </span>
-                      <span className="text-[9px] text-slate-400">
+                      <span className="text-[8px] sm:text-[9px] text-slate-400 shrink-0">
                         {m.eliminated
                           ? 'OUT'
                           : m.stance === 'downed'
-                          ? `DOWN (${m.downedTimer}s)`
+                          ? `DN(${m.downedTimer}s)`
                           : m.aiStateLabel}
                       </span>
                     </div>
@@ -400,7 +470,7 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
 
               {/* 5 Squad Commands Menu */}
               {squadDrawerOpen && (
-                <div className="mt-2 pt-1.5 border-t border-white/10 grid grid-cols-1 gap-1">
+                <div className="mt-1.5 pt-1.5 border-t border-white/10 grid grid-cols-1 gap-1">
                   {(
                     [
                       { cmd: 'follow', label: '1. Follow Me' },
@@ -416,7 +486,7 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
                         engine?.issueSquadCommand(item.cmd);
                         setSquadDrawerOpen(false);
                       }}
-                      className={`text-left px-2 py-1 rounded text-[10px] font-semibold cursor-pointer ${
+                      className={`text-left px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-semibold cursor-pointer ${
                         hud.activeSquadCommand === item.cmd
                           ? 'bg-[#00E5FF] text-slate-950'
                           : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
@@ -432,24 +502,23 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
         </div>
 
         {/* Top-Center: Match Timer, Alive Count, Eliminations, Safe-Zone / Round Banner */}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="pointer-events-auto bg-[#0B1320]/88 border border-white/15 rounded-xl px-3.5 py-1.5 flex items-center gap-3 text-xs">
+        <div className="flex flex-col items-center gap-1 min-w-0 flex-1 px-1">
+          <div className="pointer-events-auto bg-[#0B1320]/88 border border-white/15 rounded-xl px-2 py-1 sm:px-3.5 sm:py-1.5 flex items-center gap-1.5 sm:gap-3 text-[10px] sm:text-xs whitespace-nowrap">
             {hud.mode === 'clash_arena' ? (
               <>
                 <span className="font-display font-bold text-[#00E5FF]">
-                  TEAM {hud.arenaPlayerScore}
+                  TM {hud.arenaPlayerScore}
                 </span>
-                <span className="font-mono-num font-bold text-white bg-slate-800 px-2 py-0.5 rounded">
-                  RD {hud.arenaRound} · {hud.arenaRoundTimerSec}s
+                <span className="font-mono-num font-bold text-white bg-slate-800 px-1.5 py-0.5 rounded">
+                  R{hud.arenaRound} · {hud.arenaRoundTimerSec}s
                 </span>
                 <span className="font-display font-bold text-rose-400">
-                  {hud.arenaRivalScore} RIVAL
+                  {hud.arenaRivalScore} RVL
                 </span>
               </>
             ) : (
               <>
                 <span className="font-mono-num text-slate-200">
-                  TIME{' '}
                   <strong className="text-white">
                     {formatTimer(hud.matchTimeSec)}
                   </strong>
@@ -473,37 +542,37 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
           {/* Safe-Zone Status or Arena Banner */}
           {(hud.mode === 'br_solo' || hud.mode === 'br_squad') && (
             <div
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold tracking-wide border ${
+              className={`px-2 py-0.5 rounded-lg text-[9px] sm:text-[11px] font-bold tracking-wide border text-center max-w-full truncate ${
                 hud.outsideZoneWarning
                   ? 'bg-rose-950/90 border-rose-400 text-rose-200'
                   : 'bg-[#0B1320]/80 border-white/15 text-[#FDE047]'
               }`}
             >
               {hud.outsideZoneWarning
-                ? 'WARNING: OUTSIDE SAFE ZONE — MOVE TO RING!'
+                ? 'OUTSIDE SAFE ZONE — MOVE TO RING!'
                 : `STAGE ${hud.zoneStage} · ${hud.zoneStatusText}`}
             </div>
           )}
 
           {hud.mode === 'clash_arena' && hud.arenaBannerText && (
-            <div className="px-3 py-1 rounded-lg bg-[#0B1320]/85 border border-[#FF6B1A] text-xs font-display font-bold text-[#FDE047]">
+            <div className="px-2.5 py-0.5 rounded-lg bg-[#0B1320]/85 border border-[#FF6B1A] text-[10px] sm:text-xs font-display font-bold text-[#FDE047] truncate max-w-full">
               {hud.arenaBannerText}
             </div>
           )}
 
           {/* Contextual Squad Status Message */}
           {hud.mode === 'br_squad' && (
-            <div className="text-[11px] text-cyan-300 bg-[#0B1320]/75 px-2.5 py-0.5 rounded">
+            <div className="hidden sm:block text-[10px] text-cyan-300 bg-[#0B1320]/75 px-2 py-0.5 rounded truncate max-w-xs">
               {hud.squadStatusMessage}
             </div>
           )}
         </div>
 
         {/* Top-Right: Kill Feed, Inventory Toggle, Arena Shop & Pause */}
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="pointer-events-auto flex items-center gap-2">
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="pointer-events-auto flex items-center gap-1 sm:gap-2">
             {showFps && (
-              <span className="font-mono-num text-[11px] text-emerald-400 bg-[#0B1320]/80 px-2 py-1 rounded border border-white/10">
+              <span className="hidden md:inline-block font-mono-num text-[10px] text-emerald-400 bg-[#0B1320]/80 px-2 py-1 rounded border border-white/10">
                 {hud.fps} FPS
               </span>
             )}
@@ -514,10 +583,10 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
                   soundEngine.playClick();
                   setArenaShopOpen((v) => !v);
                 }}
-                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                className="h-8 sm:h-10 px-2 sm:px-3 rounded-lg bg-amber-500 text-slate-950 font-bold text-[10px] sm:text-xs flex items-center gap-1 cursor-pointer shrink-0"
               >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                Shop ({hud.arenaCredits} Cr)
+                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                <span>{hud.arenaCredits} Cr</span>
               </button>
             )}
 
@@ -526,9 +595,10 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
                 soundEngine.playClick();
                 setInventoryOpen((v) => !v);
               }}
-              className="min-w-[42px] min-h-[42px] px-2.5 rounded-lg bg-[#0B1320]/88 border border-white/20 text-xs font-semibold text-white flex items-center gap-1.5 cursor-pointer"
+              aria-label="Open Backpack"
+              className="w-8 h-8 sm:w-auto sm:h-10 sm:px-2.5 rounded-lg bg-[#0B1320]/88 border border-white/20 text-xs font-semibold text-white flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
             >
-              <Backpack className="w-4 h-4 text-[#00E5FF]" />
+              <Backpack className="w-4 h-4 text-[#00E5FF] shrink-0" />
               <span className="hidden sm:inline">Bag</span>
             </button>
 
@@ -538,18 +608,18 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
                 engine?.setPaused(hud.phase !== 'paused');
               }}
               aria-label="Pause Game"
-              className="min-w-[42px] min-h-[42px] rounded-lg bg-[#0B1320]/88 border border-white/20 flex items-center justify-center text-white cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#0B1320]/88 border border-white/20 flex items-center justify-center text-white cursor-pointer shrink-0"
             >
               <Pause className="w-4 h-4" />
             </button>
           </div>
 
           {/* Kill Feed */}
-          <div className="space-y-1 text-right">
+          <div className="space-y-1 text-right max-w-[140px] sm:max-w-[220px]">
             {hud.killFeed.map((kf) => (
               <div
                 key={kf.id}
-                className={`px-2.5 py-0.5 rounded text-[10px] font-semibold bg-[#0B1320]/80 border ${
+                className={`px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold bg-[#0B1320]/80 border truncate ${
                   kf.isPlayer
                     ? 'border-[#FF6B1A] text-[#FDE047]'
                     : 'border-white/10 text-slate-300'
@@ -564,21 +634,21 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
 
       {/* TRAINING GROUNDS FLOATING TRIAL BAR */}
       {hud.mode === 'training' && (
-        <div className="pointer-events-auto self-center bg-[#0B1320]/90 border border-[#00E5FF]/50 rounded-xl p-2.5 max-w-xl w-[92%] z-10">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
-            <span className="font-display text-xs font-bold text-[#00E5FF]">
-              TRAINING GROUNDS — SELECT PRACTICE TRIAL
+        <div className="pointer-events-auto self-center bg-[#0B1320]/90 border border-[#00E5FF]/50 rounded-xl p-2 max-w-xl w-[96%] z-10">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="font-display text-[10px] sm:text-xs font-bold text-[#00E5FF] truncate">
+              TRAINING GROUNDS — SELECT TRIAL
             </span>
-            <span className="font-mono-num text-xs text-[#FDE047]">
+            <span className="font-mono-num text-[10px] sm:text-xs text-[#FDE047] shrink-0">
               Timer: {hud.training.currentTimerSec}s
             </span>
           </div>
-          <div className="grid grid-cols-5 gap-1 mb-2">
+          <div className="grid grid-cols-5 gap-1 mb-1.5">
             {hud.training.trials.map((tr, idx) => (
               <button
                 key={tr.id}
                 onClick={() => engine?.selectTrainingTrial(idx)}
-                className={`px-2 py-1.5 rounded text-[10px] font-bold truncate cursor-pointer ${
+                className={`px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-bold truncate cursor-pointer ${
                   hud.training.activeTrialIndex === idx
                     ? 'bg-[#FF6B1A] text-white'
                     : tr.completed
@@ -592,8 +662,8 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
             ))}
           </div>
           {hud.training.trials[hud.training.activeTrialIndex] && (
-            <div className="flex items-center justify-between text-xs text-slate-200 bg-slate-900/90 rounded-lg px-3 py-1.5">
-              <span>
+            <div className="flex items-center justify-between text-[10px] sm:text-xs text-slate-200 bg-slate-900/90 rounded-lg px-2.5 py-1">
+              <span className="truncate">
                 {hud.training.trials[hud.training.activeTrialIndex].instruction}
               </span>
               <span className="font-mono-num font-bold text-[#00E5FF] ml-2 shrink-0">
@@ -606,19 +676,19 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
       )}
 
       {/* CONTEXT-SENSITIVE CENTER PROMPTS (DEPLOYMENT JUMP, LOOT PICKUP, VEHICLE, REVIVE) */}
-      <div className="relative z-10 flex flex-col items-center gap-2 my-auto pointer-events-none">
+      <div className="relative z-10 flex flex-col items-center gap-1.5 my-auto pointer-events-none px-2">
         {hud.phase === 'deployment' && (
           <button
             onClick={() => engine?.deployFromAircraft()}
-            className="pointer-events-auto px-8 py-4 rounded-2xl bg-[#FF6B1A] hover:bg-[#F97316] border-2 border-[#FEF08A] text-white font-display font-bold text-lg tracking-wider shadow-lg cursor-pointer"
+            className="pointer-events-auto px-5 py-3 sm:px-8 sm:py-4 rounded-2xl bg-[#FF6B1A] hover:bg-[#F97316] border-2 border-[#FEF08A] text-white font-display font-bold text-sm sm:text-lg tracking-wider shadow-lg cursor-pointer"
           >
-            EJECT & DEPLOY GLIDER (SPACE)
+            EJECT & DEPLOY GLIDER
           </button>
         )}
 
         {hud.stance === 'parachuting' && hud.phase === 'active' && (
-          <div className="bg-[#0B1320]/85 border border-[#00E5FF] rounded-xl px-4 py-2 text-xs text-white font-semibold">
-            Gliding to Sunset Island — Steer with Joystick / WASD · Altitude{' '}
+          <div className="bg-[#0B1320]/85 border border-[#00E5FF] rounded-xl px-3 py-1.5 text-[11px] sm:text-xs text-white font-semibold text-center">
+            Gliding to Sunset Island · Altitude{' '}
             <span className="font-mono-num text-[#FDE047]">
               {Math.round(hud.playerPos.y)}m
             </span>
@@ -628,18 +698,18 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
         {hud.nearbyLoot && hud.phase === 'active' && (
           <button
             onClick={() => engine?.pickUpNearbySupply()}
-            className="pointer-events-auto px-5 py-3 rounded-xl bg-[#0B1320]/92 border-2 flex items-center gap-2.5 text-left cursor-pointer"
+            className="pointer-events-auto px-4 py-2 sm:px-5 sm:py-3 rounded-xl bg-[#0B1320]/92 border-2 flex items-center gap-2 text-left cursor-pointer"
             style={{ borderColor: RARITY_COLORS[hud.nearbyLoot.rarity] }}
           >
             <div
-              className="w-3 h-8 rounded-sm"
+              className="w-2.5 h-7 rounded-sm shrink-0"
               style={{ backgroundColor: RARITY_COLORS[hud.nearbyLoot.rarity] }}
             />
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+              <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-slate-300">
                 TAP TO PICK UP (F)
               </div>
-              <div className="text-sm font-bold text-white">
+              <div className="text-xs sm:text-sm font-bold text-white">
                 {hud.nearbyLoot.name}
               </div>
             </div>
@@ -649,207 +719,150 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
         {(hud.nearVehicle || hud.inVehicle) && hud.phase === 'active' && (
           <button
             onClick={() => engine?.toggleVehicleEnterExit()}
-            className="pointer-events-auto px-5 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-display font-bold text-sm flex items-center gap-2 cursor-pointer"
+            className="pointer-events-auto px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-display font-bold text-xs sm:text-sm flex items-center gap-2 cursor-pointer"
           >
-            <Car className="w-4 h-4" />
-            {hud.inVehicle ? 'EXIT ISLAND ROVER (F)' : 'DRIVE ISLAND ROVER (F)'}
+            <Car className="w-4 h-4 shrink-0" />
+            {hud.inVehicle ? 'EXIT ISLAND ROVER' : 'DRIVE ISLAND ROVER'}
           </button>
         )}
 
         {hud.nearbyDownedAllyName && (
-          <div className="bg-emerald-950/90 border border-emerald-400 rounded-xl px-4 py-2 text-xs text-emerald-200 font-bold">
+          <div className="bg-emerald-950/90 border border-emerald-400 rounded-xl px-3 py-1.5 text-xs text-emerald-200 font-bold">
             Assisting {hud.nearbyDownedAllyName}...{' '}
             {Math.round(hud.reviveProgress * 100)}%
           </div>
         )}
       </div>
 
-      {/* BOTTOM REGION: LEFT THUMB VIRTUAL JOYSTICK — CENTER HEALTH & EQUIPMENT — RIGHT THUMB ACTION CLUSTER */}
-      <div className="relative z-10 flex items-end justify-between p-3 sm:p-4 gap-2">
-        {/* Bottom-Left: Multi-Touch Virtual Joystick */}
-        <div className="flex items-end gap-3">
-          <div
-            ref={joystickContainerRef}
-            onTouchStart={handleJoystickTouchStart}
-            onTouchMove={handleJoystickTouchMove}
-            onTouchEnd={handleJoystickTouchEnd}
-            onTouchCancel={handleJoystickTouchEnd}
-            className="pointer-events-auto w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#0B1320]/65 border-2 border-white/25 relative flex items-center justify-center touch-none"
-          >
-            <div className="w-2 h-2 rounded-full bg-white/30" />
+      {/* BOTTOM REGION: RESPONSIVE THUMB CONTROLS & VITALS (100% INSIDE VIEWPORT) */}
+      <div className="relative z-10 flex flex-col gap-1.5 w-full min-w-0">
+        {/* On Portrait / Narrow Screens (<640px), show Vitals & Weapons above thumb controls so Left + Right buttons never overflow */}
+        <div className="pointer-events-auto flex sm:hidden flex-col items-center gap-1 w-full max-w-sm mx-auto">
+          {renderVitalsAndWeapons()}
+        </div>
+
+        <div className="flex items-end justify-between gap-1.5 sm:gap-2 w-full min-w-0">
+          {/* Bottom-Left: Multi-Touch Virtual Joystick + Quick Heal */}
+          <div className="flex items-end gap-1.5 sm:gap-2.5 shrink-0">
             <div
-              className="w-12 h-12 rounded-full bg-[#FF6B1A]/90 border-2 border-[#FEF08A] pointer-events-none"
-              style={{
-                transform: `translate3d(${joystickKnob.x}px, ${joystickKnob.y}px, 0)`,
-              }}
-            />
-          </div>
-
-          {/* Quick Heal & Cover Gadget Buttons */}
-          <div className="pointer-events-auto flex flex-col gap-1.5">
-            <button
-              onClick={() => engine?.useHealingItem('medkit')}
-              disabled={hud.medKits <= 0}
-              className="min-w-[52px] min-h-[44px] px-2.5 py-1.5 rounded-xl bg-[#0B1320]/88 border border-emerald-400/50 text-xs font-bold text-emerald-300 flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+              ref={joystickContainerRef}
+              onTouchStart={handleJoystickTouchStart}
+              onTouchMove={handleJoystickTouchMove}
+              onTouchEnd={handleJoystickTouchEnd}
+              onTouchCancel={handleJoystickTouchEnd}
+              className="pointer-events-auto w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-[#0B1320]/65 border-2 border-white/25 relative flex items-center justify-center touch-none shrink-0"
             >
-              <Heart className="w-3.5 h-3.5" />
-              <span className="font-mono-num">{hud.medKits}</span>
-            </button>
-
-            <button
-              onClick={() => engine?.useHealingItem('shield')}
-              disabled={hud.shieldCells <= 0}
-              className="min-w-[52px] min-h-[44px] px-2.5 py-1.5 rounded-xl bg-[#0B1320]/88 border border-cyan-400/50 text-xs font-bold text-cyan-300 flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span className="font-mono-num">{hud.shieldCells}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom-Center: Health, Shield, Armor Level & Equipped Projectors */}
-        <div className="pointer-events-auto flex flex-col items-center gap-2 max-w-md w-full px-2">
-          {/* Vitals Bars */}
-          <div className="w-full bg-[#0B1320]/88 border border-white/15 rounded-xl p-2 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-mono-num">
-              <span className="text-cyan-300 font-bold">
-                SHIELD LV.{hud.armorLevel}: {hud.shield}
-              </span>
-              <span className="text-white font-bold">
-                HP: {hud.health}/{hud.maxHealth}
-              </span>
-            </div>
-            {/* Shield Bar */}
-            <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+              <div className="w-2 h-2 rounded-full bg-white/30" />
               <div
-                className="h-full bg-[#00E5FF] transition-all"
-                style={{ width: `${(hud.shield / hud.maxShield) * 100}%` }}
+                className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-[#FF6B1A]/90 border-2 border-[#FEF08A] pointer-events-none"
+                style={{
+                  transform: `translate3d(${joystickKnob.x}px, ${joystickKnob.y}px, 0)`,
+                }}
               />
             </div>
-            {/* Health Bar */}
-            <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all ${
-                  hud.health > 35 ? 'bg-emerald-400' : 'bg-rose-500'
+
+            {/* Quick Heal & Shield Buttons */}
+            <div className="pointer-events-auto flex flex-col gap-1 sm:gap-1.5 shrink-0">
+              <button
+                onClick={() => engine?.useHealingItem('medkit')}
+                disabled={hud.medKits <= 0}
+                className="min-w-[42px] sm:min-w-[50px] h-8 sm:h-10 px-2 rounded-xl bg-[#0B1320]/88 border border-emerald-400/50 text-[10px] sm:text-xs font-bold text-emerald-300 flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+              >
+                <Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span className="font-mono-num">{hud.medKits}</span>
+              </button>
+
+              <button
+                onClick={() => engine?.useHealingItem('shield')}
+                disabled={hud.shieldCells <= 0}
+                className="min-w-[42px] sm:min-w-[50px] h-8 sm:h-10 px-2 rounded-xl bg-[#0B1320]/88 border border-cyan-400/50 text-[10px] sm:text-xs font-bold text-cyan-300 flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+              >
+                <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span className="font-mono-num">{hud.shieldCells}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom-Center (Landscape >=640px): Health, Shield, Armor Level & Equipped Projectors */}
+          <div className="pointer-events-auto hidden sm:flex flex-col items-center gap-1.5 flex-1 min-w-[140px] max-w-[260px] md:max-w-md px-1">
+            {renderVitalsAndWeapons()}
+          </div>
+
+          {/* Bottom-Right: Thumb Action Cluster (Fire, Aim, Jump, Crouch, Prone, Reload) */}
+          <div className="pointer-events-auto flex items-end gap-1 sm:gap-2 shrink-0">
+            <div className="flex flex-col gap-1 sm:gap-1.5">
+              <button
+                onClick={() => engine?.triggerReload()}
+                aria-label="Reload"
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-[#0B1320]/88 border border-white/20 text-[11px] font-bold text-slate-200 flex items-center justify-center cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (!engine) return;
+                  engine.input.aiming = !engine.input.aiming;
+                }}
+                aria-label="Aim"
+                className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl border text-[11px] font-bold flex items-center justify-center cursor-pointer ${
+                  hud.isAiming
+                    ? 'bg-[#00E5FF] border-white text-slate-950'
+                    : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
                 }`}
-                style={{ width: `${(hud.health / hud.maxHealth) * 100}%` }}
-              />
+              >
+                <Crosshair className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
             </div>
-          </div>
 
-          {/* Weapon Slots & Temporary Cover Button */}
-          <div className="flex items-center gap-2 w-full">
+            {/* Primary Hold-to-Fire Thumb Button */}
             <button
-              onClick={() => engine?.switchWeaponSlot(0)}
-              className="flex-1 bg-[#0B1320]/90 border-2 border-[#FF6B1A] rounded-xl px-3 py-2 text-left cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white truncate">
-                  {activeWeapon ? activeWeapon.shortName : 'Unarmed'}
-                </span>
-                <span className="font-mono-num text-xs font-bold text-[#FDE047]">
-                  {hud.isReloading
-                    ? 'RECHRG...'
-                    : `${hud.currentClip[0]}/${hud.reserveAmmo}`}
-                </span>
-              </div>
-            </button>
-
-            {hud.weapons[1] && (
-              <button
-                onClick={() => engine?.switchWeaponSlot(1)}
-                className="bg-[#0B1320]/82 border border-white/20 rounded-xl px-3 py-2 text-left cursor-pointer"
-              >
-                <div className="text-xs font-semibold text-slate-300 truncate">
-                  Swap: {hud.weapons[1].shortName}
-                </div>
-              </button>
-            )}
-
-            {hud.coverGadgets > 0 && (
-              <button
-                onClick={() => engine?.deployTemporaryCover()}
-                className="min-h-[44px] px-3 py-2 rounded-xl bg-cyan-950/90 border border-[#00E5FF] text-xs font-bold text-[#00E5FF] flex items-center gap-1 shrink-0 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span>Cover ({hud.coverGadgets})</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom-Right: Thumb Action Cluster (Fire, Aim, Jump, Crouch, Prone, Reload) */}
-        <div className="pointer-events-auto flex items-end gap-2">
-          <div className="flex flex-col gap-1.5">
-            <button
-              onClick={() => engine?.triggerReload()}
-              className="min-w-[48px] min-h-[44px] rounded-xl bg-[#0B1320]/88 border border-white/20 text-[11px] font-bold text-slate-200 flex items-center justify-center cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                if (!engine) return;
-                engine.input.aiming = !engine.input.aiming;
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (engine) engine.input.firing = true;
               }}
-              className={`min-w-[48px] min-h-[44px] rounded-xl border text-[11px] font-bold flex items-center justify-center cursor-pointer ${
-                hud.isAiming
-                  ? 'bg-[#00E5FF] border-white text-slate-950'
-                  : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
-              }`}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                if (engine) engine.input.firing = false;
+              }}
+              onPointerLeave={() => {
+                if (engine) engine.input.firing = false;
+              }}
+              onPointerCancel={() => {
+                if (engine) engine.input.firing = false;
+              }}
+              className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-[#FF6B1A]/90 active:bg-[#EA580C] border-2 border-[#FEF08A] text-white font-display font-bold text-xs sm:text-sm flex items-center justify-center select-none touch-none cursor-pointer shrink-0"
             >
-              <Crosshair className="w-4 h-4" />
+              FIRE
             </button>
-          </div>
 
-          {/* Primary Hold-to-Fire Thumb Button */}
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              if (engine) engine.input.firing = true;
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              if (engine) engine.input.firing = false;
-            }}
-            onPointerLeave={() => {
-              if (engine) engine.input.firing = false;
-            }}
-            onPointerCancel={() => {
-              if (engine) engine.input.firing = false;
-            }}
-            className="w-20 h-20 rounded-full bg-[#FF6B1A]/90 active:bg-[#EA580C] border-2 border-[#FEF08A] text-white font-display font-bold text-sm flex items-center justify-center select-none touch-none cursor-pointer"
-          >
-            FIRE
-          </button>
-
-          <div className="flex flex-col gap-1.5">
-            <button
-              onClick={() => engine?.triggerJump()}
-              className="min-w-[52px] min-h-[44px] rounded-xl bg-[#0B1320]/88 border border-white/25 text-[11px] font-bold text-white cursor-pointer"
-            >
-              JUMP
-            </button>
-            <button
-              onClick={() => engine?.toggleCrouch()}
-              className={`min-w-[52px] min-h-[44px] rounded-xl border text-[11px] font-bold cursor-pointer ${
-                hud.stance === 'crouching'
-                  ? 'bg-amber-500 border-white text-slate-950'
-                  : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
-              }`}
-            >
-              CROUCH
-            </button>
-            <button
-              onClick={() => engine?.toggleProne()}
-              className={`min-w-[52px] min-h-[44px] rounded-xl border text-[11px] font-bold cursor-pointer ${
-                hud.stance === 'prone'
-                  ? 'bg-amber-500 border-white text-slate-950'
-                  : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
-              }`}
-            >
-              PRONE
-            </button>
+            <div className="flex flex-col gap-1 sm:gap-1.5">
+              <button
+                onClick={() => engine?.triggerJump()}
+                className="min-w-[44px] sm:min-w-[52px] h-7 sm:h-10 px-1.5 rounded-lg sm:rounded-xl bg-[#0B1320]/88 border border-white/25 text-[9px] sm:text-[11px] font-bold text-white cursor-pointer"
+              >
+                JUMP
+              </button>
+              <button
+                onClick={() => engine?.toggleCrouch()}
+                className={`min-w-[44px] sm:min-w-[52px] h-7 sm:h-10 px-1.5 rounded-lg sm:rounded-xl border text-[9px] sm:text-[11px] font-bold cursor-pointer ${
+                  hud.stance === 'crouching'
+                    ? 'bg-amber-500 border-white text-slate-950'
+                    : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
+                }`}
+              >
+                CROUCH
+              </button>
+              <button
+                onClick={() => engine?.toggleProne()}
+                className={`min-w-[44px] sm:min-w-[52px] h-7 sm:h-10 px-1.5 rounded-lg sm:rounded-xl border text-[9px] sm:text-[11px] font-bold cursor-pointer ${
+                  hud.stance === 'prone'
+                    ? 'bg-amber-500 border-white text-slate-950'
+                    : 'bg-[#0B1320]/88 border-white/20 text-slate-200'
+                }`}
+              >
+                PRONE
+              </button>
+            </div>
           </div>
         </div>
       </div>
