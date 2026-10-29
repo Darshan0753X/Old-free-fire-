@@ -1,10 +1,13 @@
 node_modules/
 build/
 dist/
+docs/
 dev-dist/
+public/assets/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+
 
