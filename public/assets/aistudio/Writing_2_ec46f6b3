@@ -1,0 +1,939 @@
+PROJECT: CLASSIC DROP V2.0 — THE NOSTALGIA UPDATE
+
+ROLE
+
+Act as a senior 3D game developer, gameplay engineer, AI programmer, mobile performance specialist, level designer, UI/UX designer, and game systems architect.
+
+You are continuing development of my existing game, CLASSIC DROP.
+
+The first version already contains the initial game systems, including a 3D environment, player controls, camera, AI opponents, collectible supplies, a shrinking safe zone, a match HUD, and match results.
+
+These are existing features, not instructions to create an unrelated replacement project.
+
+Your task is to inspect the existing implementation, identify what genuinely works, and upgrade it into a more complete classic-era mobile battle royale.
+
+The game should retain the nostalgic atmosphere of mobile battle-royale games from approximately 2018–2020.
+
+It must remain an original game with its own name, characters, maps, graphics, and interface.
+
+I am developing exclusively on an Android phone through Google AI Studio.
+
+Use the current project's supported technology and preserve its working architecture.
+
+Do not require a PC, desktop-only software, paid assets, or a mandatory external service.
+
+Do not replace working systems merely to make the code appear cleaner.
+
+Do not claim that a feature is implemented until it has been implemented and tested.
+
+---
+
+1. FIRST: AUDIT THE EXISTING PROJECT
+
+Before writing code, inspect the existing project.
+
+Identify:
+
+- Current framework and dependencies.
+- Existing game loop.
+- Current rendering engine.
+- Player controller.
+- Camera controller.
+- Touch controls.
+- Character models.
+- Collision system.
+- AI behavior.
+- Collectible system.
+- Inventory.
+- Safe-zone implementation.
+- Match-state management.
+- Existing menus and HUD.
+- Local persistence.
+- Performance bottlenecks.
+- Known bugs.
+
+Create a concise internal implementation plan.
+
+Preserve working systems and improve them incrementally.
+
+If an existing feature already works, do not replace it with a second implementation.
+
+If a requested feature conflicts with the current architecture, adapt it to the existing architecture.
+
+Prioritize stability over adding unnecessary dependencies.
+
+---
+
+2. VERSION 2.0 OBJECTIVE
+
+Upgrade CLASSIC DROP into a more complete, nostalgic, single-player-first battle-royale game.
+
+Version 2.0 should focus on:
+
+1. A functional round-based arena mode.
+2. Four-player squads with AI teammates.
+3. A dedicated training area.
+4. A richer original island.
+5. Improved AI.
+6. Better character animations.
+7. A classic-style lobby.
+8. A functional progression system.
+9. Spectator functionality.
+10. Driveable vehicles where technically practical.
+11. Better mobile performance.
+12. Reliable saving and match-state management.
+
+Do not attempt to implement all features at once.
+
+Start with the smallest set of changes that can be tested successfully.
+
+---
+
+3. FEATURE ONE: CLASH ARENA
+
+Create a new game mode named CLASH ARENA.
+
+This is an original, round-based competitive mode inspired by the general concept of small-team elimination games.
+
+It must be distinct from the existing battle-royale mode.
+
+Match structure
+
+Create two teams:
+
+- Player Team.
+- Rival Team.
+
+Each team should contain four characters when performance permits.
+
+The player controls one character.
+
+The remaining teammates are controlled by AI.
+
+The rival team is also controlled by AI.
+
+Start with a compact arena instead of reusing the entire island.
+
+Create a fictional arena called SUNSET YARD.
+
+Include:
+
+- Low walls.
+- Containers.
+- Small buildings.
+- Open lanes.
+- Elevated platforms where practical.
+- Clearly defined team starting areas.
+- Several paths between the two sides.
+- A boundary that prevents players from leaving the arena.
+
+Use original environment geometry.
+
+Do not copy a specific commercial game's arena layout.
+
+Round rules
+
+Each round should have:
+
+- A short preparation countdown.
+- A starting position for each team.
+- A defined round timer.
+- A win condition.
+- A defeat condition.
+- A transition to the next round.
+- A visible score.
+
+The primary win condition is to be the last team with active players.
+
+If the timer expires, use a fair tiebreaker based on the remaining team's status and total remaining health.
+
+Avoid indefinite draws.
+
+Use a configurable match format.
+
+Start with a best-of-five match.
+
+The first team to win three rounds wins the match.
+
+Round economy
+
+At the start of each round, allow the player to select from a limited collection of fictional equipment.
+
+Give the player a simple budget or limited selection system.
+
+Stronger equipment should have a higher selection cost.
+
+The economy should reset or update according to clear rules.
+
+Do not create pay-to-win mechanics.
+
+Required behavior
+
+Implement:
+
+- Team spawn positions.
+- Round countdown.
+- Round reset.
+- Team health.
+- Elimination.
+- Round scoring.
+- Match scoring.
+- Victory screen.
+- Defeat screen.
+- Rematch.
+- Return to lobby.
+
+Every round must start in a clean state.
+
+Eliminated characters must not continue participating in the next round.
+
+The player must not be able to exploit the reset system to create duplicate characters or preserve unintended health.
+
+If the arena mode is not yet stable, finish this mode before starting the next major feature.
+
+---
+
+4. FEATURE TWO: FOUR-PLAYER SQUAD BATTLE ROYALE
+
+Upgrade the existing solo battle-royale mode to support a squad consisting of:
+
+- One human player.
+- Three AI teammates.
+
+The opposing contestants can initially remain individual AI-controlled opponents.
+
+Do not immediately attempt a fully networked multiplayer system.
+
+Squad interface
+
+Display:
+
+- Four squad-member indicators.
+- Each member's health.
+- Each member's current status.
+- A simple indicator of the squad leader.
+- A clear marker showing teammate positions.
+
+Use original colors and symbols.
+
+Do not clutter the screen.
+
+AI teammate behavior
+
+Teammates should:
+
+- Follow the player when appropriate.
+- Maintain reasonable distance.
+- Navigate around buildings.
+- Avoid getting permanently stuck.
+- Collect useful supplies.
+- React to nearby opponents.
+- Move toward the safe zone.
+- Support the team during encounters.
+- Avoid blocking the player's movement.
+- Respond to simple contextual commands.
+
+Implement a compact command system:
+
+1. FOLLOW.
+2. HOLD POSITION.
+3. MOVE TO MARKER.
+4. REGROUP.
+5. ASSIST TEAMMATE.
+
+Commands should produce actual changes in AI behavior.
+
+Do not make them decorative buttons.
+
+Team communication
+
+Because the first version is offline-first, use simple local AI commands rather than a network chat system.
+
+Provide short contextual status messages such as:
+
+- Moving to your position.
+- Regrouping.
+- Area marked.
+- Teammate needs assistance.
+- Moving to the safe zone.
+
+Do not generate constant, repetitive messages.
+
+Incapacitation and assistance
+
+If the game supports it reliably, introduce a temporary incapacitated state before final elimination.
+
+A teammate may attempt to assist an incapacitated squad member if:
+
+- The teammate is nearby.
+- The area is sufficiently safe according to the game's rules.
+- The assistance timer can complete.
+- The player has not already been eliminated permanently.
+
+Use a clear timer and visible state.
+
+Limit repeated assistance to prevent endless encounters.
+
+If implementing this system destabilizes combat, prioritize reliable elimination and squad survival first.
+
+---
+
+5. FEATURE THREE: TRAINING GROUNDS
+
+Create a separate training area accessible from the main menu.
+
+Name it TRAINING GROUNDS.
+
+The purpose is to let players practice without starting a full battle-royale match.
+
+Training environment
+
+Create a compact original training map containing:
+
+- A movement course.
+- Obstacles for jumping.
+- A small navigation course.
+- A camera-control tutorial.
+- Clearly marked practice areas.
+- Equipment interaction stations.
+- A simple timing challenge.
+- A basic target-recognition exercise using non-graphic visual targets.
+
+Practice activities
+
+Include:
+
+Movement trial
+
+Measure how quickly the player completes a short course.
+
+Navigation trial
+
+Require the player to reach several marked locations.
+
+Camera trial
+
+Teach the player to rotate the camera and follow moving visual markers.
+
+Equipment trial
+
+Allow the player to practice selecting and switching equipment.
+
+Survival trial
+
+Teach the player to recognize safe-zone indicators and move toward a marked safe location.
+
+Training interface
+
+Display:
+
+- Current objective.
+- Progress.
+- Completion status.
+- Time taken.
+- Restart button.
+- Return-to-lobby button.
+
+Provide instructions through short visual prompts.
+
+Do not force the player to read long tutorials before playing.
+
+Training must not permanently alter the player's competitive match statistics.
+
+---
+
+6. FEATURE FOUR: EXPAND THE ORIGINAL ISLAND
+
+Expand SUNSET ISLAND while preserving good performance.
+
+Do not make the map enormous just for the sake of size.
+
+Add several distinct, original areas.
+
+Suggested locations
+
+Coastal Village
+
+Add houses, small roads, vegetation, and a few useful supply locations.
+
+Forgotten Depot
+
+Add storage buildings, containers, and interconnected paths.
+
+Hilltop Observatory
+
+Add elevated terrain and a distinctive landmark.
+
+Riverside Market
+
+Add small buildings, walkways, and natural obstacles.
+
+Abandoned Research Station
+
+Add a recognizable structure and several interior spaces.
+
+These are original locations and must not reproduce protected layouts from other games.
+
+Environmental improvements
+
+Add:
+
+- More varied terrain.
+- Better vegetation distribution.
+- Distinct building silhouettes.
+- More interesting pathways.
+- Better landmarks.
+- Small environmental details.
+- Clearer map navigation.
+- More balanced supply placement.
+
+Map quality requirements
+
+The player must not become trapped in inaccessible areas.
+
+Every accessible building must have valid collision and an appropriate entrance.
+
+Prevent supplies from spawning inside solid geometry.
+
+Ensure that the safe zone can reach valid positions.
+
+Avoid creating large regions with nothing meaningful to explore.
+
+Use simplified distant scenery.
+
+---
+
+7. FEATURE FIVE: IMPROVE COMPUTER-CONTROLLED CHARACTERS
+
+Improve the existing AI rather than replacing it unnecessarily.
+
+Use a clear state machine and lightweight navigation.
+
+AI states
+
+Support:
+
+- Idle.
+- Exploring.
+- Following.
+- Collecting supplies.
+- Moving toward a destination.
+- Investigating nearby activity.
+- Approaching an encounter.
+- Retreating.
+- Regrouping.
+- Assisting a teammate.
+- Moving toward safety.
+- Eliminated.
+
+Only use states relevant to the current game mode.
+
+Better decision-making
+
+Bots should consider:
+
+- Their current health.
+- Their available equipment.
+- Distance to a destination.
+- Nearby obstacles.
+- Their team objective.
+- Whether the safe zone is approaching.
+- Whether a teammate needs assistance.
+
+Add modest behavioral variation.
+
+Some bots can prefer exploration while others remain closer to teammates.
+
+Avoid making bots appear artificially perfect.
+
+Navigation
+
+Implement efficient waypoint navigation and obstacle avoidance.
+
+Recalculate paths only when necessary.
+
+Detect when a bot has become stuck.
+
+When a bot is stuck, attempt to:
+
+1. Stop its current movement.
+2. Select an alternative waypoint.
+3. Recalculate a short path.
+4. Resume navigation.
+
+Do not let one stuck bot block the game loop.
+
+---
+
+8. FEATURE SIX: CLASSIC-STYLE LOBBY
+
+Upgrade the main menu to create a stronger identity.
+
+The lobby should evoke the atmosphere of older mobile battle-royale games without copying any specific interface.
+
+Visual design
+
+Use:
+
+- A colorful background environment.
+- A character preview.
+- Subtle ambient movement.
+- A compact profile area.
+- Clear navigation.
+- Simple icons.
+- A prominent PLAY button.
+
+Avoid excessive pop-ups and promotional banners.
+
+Menu options
+
+Include:
+
+- Battle Royale.
+- Clash Arena.
+- Training Grounds.
+- Character Collection.
+- Achievements.
+- Match History.
+- Settings.
+
+Each option must open a functional screen.
+
+Do not display unavailable features as though they are complete.
+
+Character showcase
+
+Allow the player to:
+
+- Rotate the character.
+- Change between owned outfits.
+- Preview available cosmetics.
+- Return to the main menu.
+
+The preview must not interfere with the actual match character state.
+
+---
+
+9. FEATURE SEVEN: PROGRESSION AND ACHIEVEMENTS
+
+Add a fair, locally stored progression system.
+
+Player profile
+
+Display:
+
+- Player level.
+- Total matches.
+- Wins.
+- Top placements.
+- Total eliminations.
+- Total training challenges completed.
+- Arena match wins.
+- Experience earned.
+
+Calculate statistics from actual match results.
+
+Do not fabricate results.
+
+Experience
+
+Award experience for:
+
+- Completing a match.
+- Finishing a training challenge.
+- Winning a round-based match.
+- Reaching a high placement.
+- Completing a predefined objective.
+
+Do not award unlimited experience for repeatedly pressing a button.
+
+Prevent duplicate rewards from the same match.
+
+Achievements
+
+Create original achievements such as:
+
+- First Landing.
+- First Victory.
+- Island Explorer.
+- Training Graduate.
+- Team Player.
+- Arena Champion.
+- Safe-Zone Survivor.
+- Collector.
+
+Track actual completion conditions.
+
+Provide a clear progress indicator.
+
+Rewards
+
+Use cosmetics as rewards.
+
+Examples include:
+
+- Outfit color variations.
+- Backpacks.
+- Character accessories.
+- Victory poses.
+- Lobby backgrounds.
+- Profile frames.
+
+Cosmetics must not increase combat power.
+
+Do not require real-money purchases.
+
+---
+
+10. FEATURE EIGHT: MATCH HISTORY
+
+Add a functional match-history screen.
+
+Record:
+
+- Match type.
+- Date and time where available.
+- Match duration.
+- Final placement.
+- Eliminations.
+- Victory or defeat.
+- Arena round score where applicable.
+
+Use local persistence.
+
+Limit the number of stored records to prevent uncontrolled growth.
+
+Handle corrupted saved data gracefully.
+
+Allow the player to clear match history from settings.
+
+Ensure that restarting a match does not create duplicate history entries.
+
+---
+
+11. FEATURE NINE: SPECTATOR MODE
+
+Implement a spectator state after the player is eliminated.
+
+Allow the player to watch active AI-controlled contestants.
+
+Provide:
+
+- Next contestant.
+- Previous contestant.
+- Current spectator name.
+- Remaining contestant count.
+- Return-to-results option.
+
+The spectator camera should follow the selected character smoothly.
+
+Prevent the camera from becoming trapped inside buildings.
+
+Do not allow the spectator interface to interfere with the active match.
+
+If every opponent has been eliminated, transition to the results screen instead of remaining in spectator mode indefinitely.
+
+---
+
+12. FEATURE TEN: DRIVEABLE VEHICLES
+
+Add one simple fictional vehicle to the battle-royale map.
+
+Do not implement a large vehicle collection in the first attempt.
+
+Vehicle requirements
+
+The player must be able to:
+
+- Approach the vehicle.
+- Enter it.
+- Accelerate.
+- Brake.
+- Steer.
+- Reverse.
+- Exit safely.
+
+Use an original, stylized vehicle model.
+
+Implement basic movement, collision, and a reasonable turning radius.
+
+Prevent the vehicle from:
+
+- Driving through solid buildings.
+- Falling through the ground.
+- Becoming permanently stuck against walls.
+- Moving uncontrollably after the player exits.
+- Teleporting unexpectedly.
+
+Use a simple vehicle physics model appropriate for mobile performance.
+
+AI opponents do not need to drive vehicles in this version.
+
+If vehicle physics prove unreliable, finish all other Version 2.0 features first.
+
+---
+
+13. FEATURE ELEVEN: GRAPHICS AND PERFORMANCE
+
+Maintain a mobile-first performance budget.
+
+Use the existing rendering architecture.
+
+If the project uses Three.js, consider the following where appropriate:
+
+- InstancedMesh for repeated environmental objects.
+- Shared materials.
+- Merged static geometry.
+- Reduced shadow complexity.
+- Distance-based detail.
+- Limited particle counts.
+- Efficient collision checks.
+- Object pooling.
+- Capped device pixel ratio.
+- Proper GPU resource disposal.
+
+Use InstancedMesh when many copies of the same geometry and material can be rendered efficiently.
+
+Do not introduce complicated optimization systems without evidence that they are needed.
+
+Provide three graphics presets:
+
+LOW:
+
+- Minimal shadows.
+- Reduced environmental detail.
+- Lower rendering resolution.
+
+MEDIUM:
+
+- Balanced shadows.
+- Moderate environmental detail.
+- Standard rendering resolution.
+
+HIGH:
+
+- More detailed environment.
+- Improved shadows.
+- Higher rendering resolution when the device can handle it.
+
+Make the settings functional.
+
+Changing the graphics preset should update the actual rendering configuration.
+
+Do not allow the HIGH preset to make the game unusable on mobile hardware.
+
+---
+
+14. FEATURE TWELVE: IMPROVE THE MOBILE EXPERIENCE
+
+Test the complete game on a phone-sized viewport.
+
+The interface must remain usable in landscape orientation.
+
+Ensure:
+
+- The virtual joystick works.
+- Camera movement works while the player is moving.
+- Multiple touch inputs work simultaneously.
+- Action buttons respond correctly.
+- Buttons do not trigger accidentally.
+- The browser does not scroll during gameplay.
+- HUD elements remain inside the screen.
+- Menus are readable.
+- The player can return to the lobby.
+- Audio controls work.
+- The game can be restarted safely.
+
+Do not introduce keyboard-only interactions for essential gameplay.
+
+Keyboard and controller support can remain optional.
+
+---
+
+15. LOCAL SAVE SYSTEM
+
+Extend the existing save system rather than creating conflicting storage formats.
+
+Persist:
+
+- Player level.
+- Experience.
+- Owned cosmetics.
+- Selected outfit.
+- Match history.
+- Achievements.
+- Settings.
+- Total statistics.
+
+Use versioned save data.
+
+If the save format changes, provide a migration path or safe defaults.
+
+If saved data is corrupted, recover gracefully without crashing the application.
+
+Avoid saving large 3D objects, meshes, or runtime references.
+
+Save only the information required to restore player progress.
+
+Do not store credentials or sensitive information.
+
+---
+
+16. DO NOT ADD THESE FEATURES YET
+
+Do not immediately implement:
+
+- A large online multiplayer infrastructure.
+- Real-money purchases.
+- Paid cosmetic systems.
+- Complex social networking.
+- Global matchmaking.
+- Voice chat.
+- Large-scale persistent worlds.
+- Unnecessary external databases.
+
+These features would significantly increase complexity and are not required to make Version 2.0 enjoyable.
+
+Focus on a polished offline experience.
+
+Design the code so that networking could be added later without pretending that it already exists.
+
+---
+
+17. IMPLEMENTATION ORDER
+
+Work through the following milestones.
+
+MILESTONE A:
+Audit the current code and fix any critical problems that prevent the existing match from working.
+
+MILESTONE B:
+Implement Clash Arena.
+
+MILESTONE C:
+Implement four-player squad gameplay and AI teammates.
+
+MILESTONE D:
+Implement Training Grounds.
+
+MILESTONE E:
+Improve the island and AI navigation.
+
+MILESTONE F:
+Implement the lobby, achievements, progression, and match history.
+
+MILESTONE G:
+Implement spectator mode.
+
+MILESTONE H:
+Implement the optional vehicle.
+
+MILESTONE I:
+Optimize graphics and test the complete mobile experience.
+
+Do not start a new milestone while the current one contains a critical bug.
+
+Keep working functionality intact throughout the upgrade.
+
+If the environment cannot complete every milestone in one generation, finish the current milestone, summarize the remaining work, and continue incrementally.
+
+---
+
+18. REQUIRED TESTS
+
+Test the following where the environment permits.
+
+Battle Royale
+
+- A match starts.
+- The player can move.
+- Bots behave correctly.
+- Collectibles work.
+- The safe zone functions.
+- A match can end in victory or defeat.
+- Results are saved once.
+- Restart works.
+
+Clash Arena
+
+- Both teams spawn correctly.
+- The countdown works.
+- Players can be eliminated.
+- Round scores update correctly.
+- The next round resets correctly.
+- The match ends at the intended score.
+- Rematch works.
+
+Squad mode
+
+- Three AI teammates spawn.
+- Team status is displayed.
+- Commands alter teammate behavior.
+- Teammates navigate around obstacles.
+- Teammates respond to relevant situations.
+- Eliminated teammates do not continue participating.
+
+Training
+
+- The player can enter and exit training.
+- Training objectives update correctly.
+- Results are displayed.
+- Restart works.
+
+Progression
+
+- Experience is calculated correctly.
+- Achievements unlock only when their conditions are met.
+- Match history contains actual results.
+- Save data persists across application reloads.
+
+Mobile performance
+
+- The application opens without a blank screen.
+- Touch controls work.
+- The game remains inside the viewport.
+- No critical runtime errors occur.
+- Graphics settings have a real effect.
+- Match restarts do not leave old game objects or timers running.
+
+Report which tests were actually completed.
+
+Do not invent test results.
+
+---
+
+19. FINAL INSTRUCTIONS
+
+Start by inspecting the existing project.
+
+Then implement Version 2.0 in the order specified above.
+
+Preserve the current game and its working features.
+
+Do not generate an unrelated replacement application.
+
+Do not return only a design document, screenshot, or menu mockup.
+
+Use the available live preview to test the game.
+
+Fix the most important errors before adding optional features.
+
+If time or environment limitations prevent completing the entire specification, prioritize:
+
+1. Stable existing battle royale.
+2. Functional Clash Arena.
+3. Squad AI.
+4. Training Grounds.
+5. Progression and match history.
+6. Remaining polish.
+
+At the end, provide a concise report listing:
+
+- Features actually implemented.
+- Features tested successfully.
+- Known bugs.
+- Performance concerns.
+- Features still pending.
+- The next recommended development milestone.
+
+The goal is to make CLASSIC DROP V2.0 a more complete, polished, and enjoyable classic-era mobile battle-royale game while keeping it practical to develop on an Android phone.

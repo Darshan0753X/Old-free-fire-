@@ -1,0 +1,6 @@
+{
+  "name": "Classic Drop: V2 Nostalgia Edition",
+  "description": "A classic-era 2018-2020 3D mobile battle royale and tactical arena game featuring Sunset Island (Solo & 4-Player Squads), Clash Arena (Sunset Yard), Training Grounds, drivable vehicles, articulated 3D characters, and offline progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
