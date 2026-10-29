@@ -23,7 +23,21 @@
   </head>
   <body class="bg-[#0B1320] text-white overflow-hidden select-none">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script id="vite-entry" type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        var entry = document.getElementById('vite-entry');
+        if (
+          entry &&
+          entry.getAttribute('src') === '/src/main.tsx' &&
+          window.location.hostname.indexOf('github.io') !== -1 &&
+          window.location.pathname.indexOf('/docs/') === -1
+        ) {
+          var base = window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+          window.location.replace(base + '/docs/index.html');
+        }
+      })();
+    </script>
   </body>
 </html>
 
