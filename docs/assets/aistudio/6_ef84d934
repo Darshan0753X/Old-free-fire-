@@ -1,0 +1,551 @@
+CLASSIC DROP — MOBILE CONTROLS & GAMEPLAY FIX UPDATE
+
+ROLE
+
+Act as a senior mobile game developer, Three.js gameplay engineer, touchscreen UI/UX specialist, and 3D projectile-physics engineer.
+
+My existing CLASSIC DROP game is working, but it has serious mobile usability and aiming problems.
+
+Your task is to inspect the existing code, identify the root causes, and fix the problems directly in the current project.
+
+IMPORTANT: Do not rebuild the game from scratch, remove existing features, or replace working systems unnecessarily. Preserve the existing architecture and improve it.
+
+The game must work properly on Android phones, including Android 15 browsers.
+
+---
+
+1. FIX THE SCREEN AND BUTTON LAYOUT
+
+Currently, some buttons extend beyond the screen, and other buttons are partially hidden or completely inaccessible.
+
+Fix the entire mobile interface.
+
+Requirements
+
+- Keep every essential button inside the visible screen.
+- Prevent buttons from extending beyond the left, right, top, or bottom edges.
+- Account for Android status bars, browser interface elements, and safe areas where applicable.
+- Adapt the interface to different screen sizes and aspect ratios.
+- Support landscape orientation as the primary gameplay orientation.
+- Prevent the HUD from becoming too large or too small on different phones.
+- Prevent buttons from overlapping each other unintentionally.
+- Ensure that the joystick, aiming area, and action buttons remain accessible simultaneously.
+- Make sure menus and settings screens fit within the available viewport.
+
+Use responsive CSS, appropriate viewport units, safe-area insets, and a consistent layout system.
+
+Do not solve this problem by simply shrinking every button until it becomes difficult to press.
+
+Maintain comfortable touchscreen targets, preferably around 48 CSS pixels or larger for frequently used controls when screen space permits.
+
+Use a responsive layout that rearranges controls when necessary.
+
+Check the actual layout on a narrow landscape viewport rather than assuming that desktop dimensions will work.
+
+---
+
+2. ADD A SCROLLABLE AND RESPONSIVE BUTTON LAYOUT
+
+Some controls and menu buttons are not visible because there is no usable scrolling behavior.
+
+Fix this properly.
+
+Menu scrolling
+
+- Make long menus vertically scrollable.
+- Ensure all buttons remain reachable.
+- Keep headings and important navigation accessible.
+- Avoid scrolling the entire game viewport accidentally.
+- Keep scrollbars subtle but usable where appropriate.
+
+Settings scrolling
+
+- Allow the settings page to scroll vertically when its content exceeds the available height.
+- Keep controls within the screen.
+- Ensure the Apply, Save, and Back buttons remain accessible.
+- Use a sticky bottom action area only when it does not obscure settings.
+- Ensure scrolling works with both touch gestures and mouse input.
+
+In-game HUD
+
+Do not make the entire gameplay screen scrollable.
+
+Instead, reposition and scale HUD elements responsively so that essential gameplay controls remain visible.
+
+If the game contains a button panel with more controls than can fit, organize secondary actions into an expandable panel.
+
+Never hide essential combat controls inside a panel that cannot be opened during gameplay.
+
+---
+
+3. CREATE A COMPLETE CONTROL CUSTOMIZATION SYSTEM
+
+Add a dedicated settings section called:
+
+CONTROLS & HUD CUSTOMIZATION
+
+The player must be able to configure the controls instead of being forced to use one fixed layout.
+
+A. Customizable buttons
+
+Allow the player to reposition the following controls individually:
+
+- Movement joystick.
+- Camera-look area.
+- Aim button.
+- Fire button.
+- Jump button.
+- Sprint button.
+- Crouch button.
+- Prone button, if supported.
+- Reload button.
+- Equipment-switch button.
+- Equipment-use button.
+- Pickup/interact button.
+- Inventory button.
+- Map button.
+- Temporary-cover button, if implemented.
+
+Only show controls that are actually supported by the current game.
+
+Do not create fake controls for nonexistent features.
+
+B. Drag-and-drop editing
+
+Add an Edit HUD mode.
+
+When activated:
+
+1. Display every configurable control.
+2. Show a clear outline around each control.
+3. Allow the player to drag controls to new positions.
+4. Prevent controls from being dragged completely off-screen.
+5. Allow the player to resize individual controls.
+6. Allow the player to adjust transparency.
+7. Display a preview of the layout.
+8. Provide Save Layout and Cancel buttons.
+9. Provide a Restore Default Layout button.
+
+Use percentage-based or normalized positions where appropriate so layouts adapt to different screen dimensions.
+
+For example, store a button's position relative to the available gameplay viewport rather than storing only fixed pixel coordinates.
+
+Convert stored positions to screen coordinates during layout.
+
+Make sure resizing the browser or rotating the phone does not destroy the saved layout.
+
+C. Button settings
+
+For each configurable action button, support:
+
+- Position.
+- Size.
+- Opacity.
+- Visibility, where the control is optional.
+- Suitable interaction behavior.
+- Reset-to-default option.
+
+Use appropriate minimum and maximum size limits.
+
+Prevent important controls from being moved into unusable positions.
+
+If two buttons overlap, display a warning or allow the player to correct the overlap.
+
+D. Save the layout
+
+Save the user's configuration locally using the existing persistence system or localStorage.
+
+The layout must survive:
+
+- Page reloads.
+- Closing and reopening the game.
+- Returning to the main menu.
+- Starting another match.
+
+Use a versioned data format.
+
+If saved layout data is invalid, recover gracefully and load the default layout.
+
+Do not reset the player's settings every time the game starts.
+
+---
+
+4. FIX THE CROSSBOW AIMING AND PROJECTILE DIRECTION
+
+THIS IS A CRITICAL GAMEPLAY BUG.
+
+Currently, when I aim and fire the crossbow, the projectile travels in a different direction from where I am aiming.
+
+Fix the actual root cause in the existing game logic.
+
+Do not compensate by randomly rotating the projectile or adding an arbitrary directional offset.
+
+First inspect the camera, crossbow, projectile-spawn, and aiming code.
+
+A. Correct aiming architecture
+
+Use a consistent world-space aiming system.
+
+The intended direction must be calculated from the player's actual aiming target.
+
+Implement the following logical sequence:
+
+1. Identify the current camera and its world-space position.
+2. Determine the center of the aiming reticle or the selected aiming point.
+3. Cast a ray from the camera through that point.
+4. Determine the intended target position using raycasting against the environment.
+5. If nothing is hit, use a reasonable point along the ray.
+6. Determine the crossbow's actual world-space firing origin.
+7. Calculate a normalized direction vector from the firing origin toward the intended target.
+8. Spawn the projectile at the correct crossbow position.
+9. Give the projectile velocity along the calculated direction.
+10. Update projectile movement and collision consistently.
+
+Use Three.js world-space coordinates correctly.
+
+If the camera uses a perspective projection, calculate the ray using the correct normalized device coordinates and camera.
+
+Do not mix local-space positions with world-space directions.
+
+Do not assume that the camera direction and crossbow direction are automatically identical.
+
+B. Camera and muzzle alignment
+
+The projectile should visually originate from the crossbow, not from the camera.
+
+However, it should travel toward the point the player is actually aiming at.
+
+When the crossbow is held to the side of the camera, calculate the firing direction using the crossbow's actual world-space origin and the intended target.
+
+This avoids the common problem where projectiles appear to travel sideways because the firing origin and camera ray are different.
+
+If the intended target is extremely close, use a safe minimum distance or appropriate direction fallback to prevent invalid vectors.
+
+C. Crosshair behavior
+
+Display a clear aiming reticle when aiming.
+
+The reticle must represent the actual direction used to calculate the intended target.
+
+When the player rotates the camera:
+
+- The reticle must remain aligned with the camera's aiming direction.
+- The target point must update correctly.
+- The projectile direction must update accordingly.
+
+If the game uses a fixed center-screen reticle, use that exact screen position for raycasting.
+
+If the game uses a separate movable aiming reticle, use its actual screen coordinates.
+
+Do not calculate aiming from one location while drawing the reticle at another.
+
+D. Projectile physics
+
+Inspect the existing projectile update loop.
+
+Ensure that:
+
+- The projectile starts at the correct world-space position.
+- Velocity uses the intended direction.
+- Frame-rate differences do not change projectile direction.
+- Gravity, if used, is applied consistently.
+- Collision detection uses the projectile's actual trajectory.
+- The projectile does not immediately collide with the player or crossbow.
+- The projectile does not pass through nearby walls.
+- The projectile does not rotate independently of its travel direction.
+
+For a simple arcade-style crossbow, the projectile should initially travel toward the intended target and follow a predictable trajectory.
+
+If gravity is enabled, account for the resulting projectile drop at longer distances.
+
+Do not apply gravity accidentally or inconsistently.
+
+E. Crossbow orientation
+
+Ensure that the crossbow model faces along the intended firing axis.
+
+Check the model's local forward direction.
+
+Some 3D models face the positive Z-axis while others face the negative Z-axis.
+
+Do not assume which direction the model uses.
+
+Correctly transform the firing direction and model orientation into world space.
+
+If the model's forward axis differs from the projectile's forward axis, correct the transformation explicitly.
+
+Do not alter the player's entire coordinate system to compensate for a crossbow-specific error.
+
+F. Debugging
+
+Temporarily add an optional development-only debug visualization:
+
+- Camera position.
+- Crossbow firing origin.
+- Camera aiming ray.
+- Intended target point.
+- Projectile initial direction.
+
+Use these visual markers to verify the geometry.
+
+Remove or disable the debug visualization in normal gameplay.
+
+Test aiming at:
+
+- A nearby target.
+- A distant target.
+- A target to the left.
+- A target to the right.
+- A target above.
+- A target below.
+- A target near a wall.
+
+The crossbow must consistently fire toward the intended aiming point, subject to its configured projectile physics.
+
+Do not declare this bug fixed until the actual projectile direction has been tested.
+
+---
+
+5. ADD PROPER AIMING SETTINGS
+
+Create a new settings category called AIMING & SENSITIVITY.
+
+Include the following controls.
+
+Camera sensitivity
+
+A slider for camera-look sensitivity.
+
+Aiming sensitivity
+
+A separate slider for camera movement while aiming.
+
+Horizontal sensitivity
+
+Allow horizontal camera movement to be adjusted independently.
+
+Vertical sensitivity
+
+Allow vertical camera movement to be adjusted independently.
+
+Invert vertical camera
+
+Provide an enable/disable switch.
+
+Aim behavior
+
+If supported by the current input system, offer:
+
+- Hold to aim.
+- Toggle aim.
+
+Aim assist
+
+Provide an optional, subtle aim-assist setting only if it can be implemented reliably.
+
+Aim assist must not automatically select distant enemies or override the player's intention.
+
+If aim assist is enabled, use a small configurable assistance radius and retain player control.
+
+Crosshair settings
+
+Allow the player to adjust:
+
+- Crosshair size.
+- Crosshair opacity.
+- Crosshair style, using a small selection of original designs.
+
+All settings must be saved locally and actually affect gameplay.
+
+---
+
+6. ADD A COMPLETE SETTINGS MENU
+
+Organize settings into clear sections.
+
+CONTROLS & HUD
+
+- Edit HUD.
+- Button size.
+- Button opacity.
+- Restore default layout.
+- Joystick sensitivity.
+- Control visibility.
+
+AIMING & CAMERA
+
+- Camera sensitivity.
+- Aiming sensitivity.
+- Horizontal sensitivity.
+- Vertical sensitivity.
+- Invert vertical camera.
+- Aim behavior.
+- Crosshair customization.
+
+GRAPHICS
+
+- Low, Medium, and High presets.
+- Shadow quality.
+- Rendering resolution where supported.
+- Environmental detail.
+
+AUDIO
+
+- Master volume.
+- Sound effects volume.
+- Music volume.
+- Mute option.
+
+GAMEPLAY
+
+- Aim-assist option, if implemented.
+- Camera settings.
+- Control behavior.
+- Available gameplay accessibility options.
+
+Use sliders, toggles, and selectors with readable labels and current values.
+
+All settings must have immediate or explicitly confirmed effects.
+
+Do not create decorative settings that do not modify the game.
+
+Keep the settings menu scrollable on smaller screens.
+
+---
+
+7. FIX TOUCH INPUT AND POINTER HANDLING
+
+Inspect the existing touch event implementation.
+
+Make sure the controls work together correctly.
+
+Requirements:
+
+- Movement joystick and camera-look input must work simultaneously.
+- Firing must not accidentally rotate the camera unless the player is intentionally touching the look area.
+- Dragging a HUD button in Edit HUD mode must not trigger that button's gameplay action.
+- A touch beginning on one control must not unexpectedly activate another control.
+- Touch identifiers must be tracked correctly.
+- Pointer cancellation must release the associated input.
+- Buttons must not remain permanently pressed after a touch ends.
+- Multiple simultaneous touches must work where required.
+- Browser scrolling must be prevented during active gameplay without breaking settings-menu scrolling.
+
+Use pointer events or a consistent touch-input abstraction.
+
+Use appropriate pointer-capture behavior where suitable.
+
+Apply "touch-action: none" only to the gameplay input areas that require it.
+
+Do not disable scrolling globally on the entire application.
+
+Make sure the settings menu and editable HUD remain usable.
+
+---
+
+8. RESPONSIVE LAYOUT AND SCREEN RESIZING
+
+Create a single reliable mechanism for updating the interface after:
+
+- Viewport resizing.
+- Orientation changes.
+- Browser interface changes.
+- Entering or leaving fullscreen, where supported.
+- Opening and closing menus.
+
+Recalculate the available gameplay viewport.
+
+Update HUD placement and camera projection correctly.
+
+Keep touch controls inside the usable viewport.
+
+If the viewport becomes too small, reorganize secondary controls into an accessible expandable panel.
+
+Do not hide the fire, aim, movement, or jump controls.
+
+Avoid unnecessary repeated layout calculations.
+
+Ensure that the game canvas does not stretch incorrectly or distort the 3D world.
+
+---
+
+9. REQUIRED TESTING
+
+After making the changes, use the available preview and debugging tools.
+
+Test these scenarios:
+
+Layout
+
+- Every essential button is visible.
+- No essential control is outside the screen.
+- Long settings pages can scroll.
+- Menu buttons remain accessible.
+- The HUD adapts to a narrow landscape screen.
+- HUD customization survives reloading.
+
+HUD editor
+
+- Buttons can be dragged.
+- Buttons can be resized.
+- Opacity changes work.
+- Layout saving works.
+- Reset restores the default.
+- Controls remain usable after resizing the viewport.
+
+Crossbow
+
+- The crossbow fires toward the reticle.
+- Aiming left produces a leftward shot toward the intended target.
+- Aiming right produces a rightward shot toward the intended target.
+- Aiming upward and downward works.
+- Nearby targets work.
+- Distant targets work.
+- Projectiles collide correctly with the environment.
+- Repeated shots do not accumulate incorrect directional offsets.
+
+Input
+
+- Movement and camera input work simultaneously.
+- Firing does not unexpectedly steal camera input.
+- Settings scrolling works.
+- HUD editing does not fire weapons.
+- Releasing touch input reliably releases controls.
+
+Stability
+
+- Existing game modes still work.
+- The match can start and finish.
+- The restart flow works.
+- No critical runtime errors are introduced.
+- The game remains playable on Android.
+
+Do not claim that a test passed unless it was actually performed.
+
+---
+
+10. FINAL EXECUTION INSTRUCTIONS
+
+Start by inspecting the current source code and identifying the actual causes of the problems.
+
+Implement fixes directly in the existing project.
+
+Prioritize work in this order:
+
+1. Correct crossbow aiming and projectile direction.
+2. Fix screen overflow and missing buttons.
+3. Implement responsive, scrollable menus.
+4. Add HUD editing and local layout persistence.
+5. Add aiming and sensitivity settings.
+6. Correct simultaneous touch input.
+7. Test all existing gameplay features.
+
+Preserve the existing visual identity and gameplay.
+
+Do not remove features simply because they are difficult to fix.
+
+Do not rewrite the whole project unnecessarily.
+
+If the changes are too large for one implementation cycle, complete the first three priorities before continuing.
+
+At the end, provide a concise report listing the changes made, the tests actually performed, and any remaining issues.

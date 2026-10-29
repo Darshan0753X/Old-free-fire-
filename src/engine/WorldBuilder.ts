@@ -291,18 +291,38 @@ function addAccessibleBuilding(
     heightAt: () => baseY + 0.2,
   });
 
-  // Back wall (-Z)
-  const backWall = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, wallThick),
+  // Back wall (-Z) with accessible rear doorway so players & AI bots can enter/exit from both sides
+  const backSegWidth = (width - doorWidth) / 2;
+  const backLeft = new THREE.Mesh(
+    new THREE.BoxGeometry(backSegWidth, height, wallThick),
     wallMat
   );
-  backWall.position.set(0, height / 2, -hd);
-  backWall.castShadow = true;
-  backWall.receiveShadow = true;
-  buildingGroup.add(backWall);
+  backLeft.position.set(-hw + backSegWidth / 2, height / 2, -hd);
+  backLeft.castShadow = true;
+  backLeft.receiveShadow = true;
+  buildingGroup.add(backLeft);
   colliders.push({
-    id: `${idPrefix}_back`,
+    id: `${idPrefix}_bl`,
     minX: cx - hw,
+    maxX: cx - doorWidth / 2,
+    minY: baseY,
+    maxY: baseY + height,
+    minZ: cz - hd - wallThick / 2,
+    maxZ: cz - hd + wallThick / 2,
+    blocksProjectiles: true,
+  });
+
+  const backRight = new THREE.Mesh(
+    new THREE.BoxGeometry(backSegWidth, height, wallThick),
+    wallMat
+  );
+  backRight.position.set(hw - backSegWidth / 2, height / 2, -hd);
+  backRight.castShadow = true;
+  backRight.receiveShadow = true;
+  buildingGroup.add(backRight);
+  colliders.push({
+    id: `${idPrefix}_br`,
+    minX: cx + doorWidth / 2,
     maxX: cx + hw,
     minY: baseY,
     maxY: baseY + height,
@@ -310,6 +330,24 @@ function addAccessibleBuilding(
     maxZ: cz - hd + wallThick / 2,
     blocksProjectiles: true,
   });
+
+  const backLintelH = height - doorHeight;
+  if (backLintelH > 0.1) {
+    const backLintel = new THREE.Mesh(
+      new THREE.BoxGeometry(doorWidth, backLintelH, wallThick),
+      roofMat
+    );
+    backLintel.position.set(0, doorHeight + backLintelH / 2, -hd);
+    buildingGroup.add(backLintel);
+  }
+
+  // Interior supply bench along the -X interior wall (leaves center corridor clear)
+  const benchMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 0.75, 2.6),
+    roofMat
+  );
+  benchMesh.position.set(-hw + 1.1, 0.55, 0);
+  buildingGroup.add(benchMesh);
 
   // Left wall (-X)
   const leftWall = new THREE.Mesh(
@@ -704,25 +742,174 @@ function buildSunsetIsland(
           blocksProjectiles: true,
         });
       }
+      // Coastal Lighthouse Beacon at Old Harbor
+      const lhx = reg.x + 22;
+      const lhz = reg.z - 14;
+      const lhy = groundHeightAt(lhx, lhz, 'br_solo');
+      const lhTower = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.5, 2.2, 8.5, 10),
+        new THREE.MeshStandardMaterial({ color: '#F8FAFC', roughness: 0.5 })
+      );
+      lhTower.position.set(lhx, lhy + 4.25, lhz);
+      const lhBeacon = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.3, 1.3, 1.4, 10),
+        new THREE.MeshStandardMaterial({
+          color: '#EF4444',
+          emissive: '#F59E0B',
+          emissiveIntensity: 0.45,
+        })
+      );
+      lhBeacon.position.set(lhx, lhy + 9.1, lhz);
+      worldGroup.add(lhTower, lhBeacon);
+      colliders.push({
+        id: 'harbor_lighthouse',
+        minX: lhx - 2.1,
+        maxX: lhx + 2.1,
+        minY: lhy,
+        maxY: lhy + 9.5,
+        minZ: lhz - 2.1,
+        maxZ: lhz + 2.1,
+        blocksProjectiles: true,
+      });
     }
 
-    // Military Training Compound Watchtower & Barricades in Dustyard & Forgotten Depot
+    // Military Training Compound & Industrial Watchtower with Climbable Stair Ramp
     if (reg.id === 'dustyard' || reg.id === 'forgotten_depot') {
       const tx = reg.x;
       const tz = reg.z - 16;
       const ty = groundHeightAt(tx, tz, 'br_solo');
+      const towerMat = new THREE.MeshStandardMaterial({
+        color: '#475569',
+        roughness: 0.7,
+      });
       const towerDeck = new THREE.Mesh(
         new THREE.BoxGeometry(5.2, 0.35, 5.2),
-        new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.7 })
+        towerMat
       );
       towerDeck.position.set(tx, ty + 4.2, tz);
       worldGroup.add(towerDeck);
+
+      // 4 corner support posts
+      for (const [px, pz] of [
+        [-2.2, -2.2],
+        [2.2, -2.2],
+        [-2.2, 2.2],
+        [2.2, 2.2],
+      ]) {
+        const post = new THREE.Mesh(
+          new THREE.BoxGeometry(0.35, 4.2, 0.35),
+          towerMat
+        );
+        post.position.set(tx + px, ty + 2.1, tz + pz);
+        worldGroup.add(post);
+      }
+
+      // Walkable deck surface
       walkableSurfaces.push({
         minX: tx - 2.6,
         maxX: tx + 2.6,
         minZ: tz - 2.6,
         maxZ: tz + 2.6,
         heightAt: () => ty + 4.38,
+      });
+
+      // Climbable stair ramp on the +X side of the watchtower
+      const stairSteps = 7;
+      const stairLen = 5.2;
+      for (let s = 0; s < stairSteps; s++) {
+        const sh = ((s + 1) / stairSteps) * 4.2;
+        const sz = tz + 2.6 - ((s + 0.5) / stairSteps) * stairLen;
+        const step = new THREE.Mesh(
+          new THREE.BoxGeometry(1.6, sh, stairLen / stairSteps),
+          towerMat
+        );
+        step.position.set(tx + 3.4, ty + sh / 2, sz);
+        worldGroup.add(step);
+      }
+      walkableSurfaces.push({
+        minX: tx + 2.5,
+        maxX: tx + 4.3,
+        minZ: tz - 2.6,
+        maxZ: tz + 2.6,
+        heightAt: (_x: number, z: number) => {
+          const progress = THREE.MathUtils.clamp(
+            (tz + 2.6 - z) / stairLen,
+            0,
+            1
+          );
+          return ty + progress * 4.38;
+        },
+      });
+
+      // Industrial Silos in Dustyard
+      if (reg.id === 'dustyard') {
+        for (const sxOff of [-16, -21]) {
+          const sy = groundHeightAt(reg.x + sxOff, reg.z + 10, 'br_solo');
+          const silo = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.4, 2.4, 6.5, 10),
+            new THREE.MeshStandardMaterial({
+              color: '#94A3B8',
+              roughness: 0.45,
+              metalness: 0.3,
+            })
+          );
+          silo.position.set(reg.x + sxOff, sy + 3.25, reg.z + 10);
+          silo.castShadow = true;
+          worldGroup.add(silo);
+          colliders.push({
+            id: `dustyard_silo_${sxOff}`,
+            minX: reg.x + sxOff - 2.4,
+            maxX: reg.x + sxOff + 2.4,
+            minY: sy,
+            maxY: sy + 6.5,
+            minZ: reg.z + 10 - 2.4,
+            maxZ: reg.z + 10 + 2.4,
+            blocksProjectiles: true,
+          });
+        }
+      }
+    }
+
+    // Warehouse District Large Open-Bay Depot in Supply Yard & Metro Plaza
+    if (reg.id === 'supply_yard' || reg.id === 'metro_plaza') {
+      const wx = reg.x - 2;
+      const wz = reg.z + 17;
+      const wy = groundHeightAt(wx, wz, 'br_solo');
+      addAccessibleBuilding(
+        worldGroup,
+        colliders,
+        walkableSurfaces,
+        `${reg.id}_warehouse`,
+        wx,
+        wz,
+        13,
+        10,
+        4.2,
+        wy,
+        '#CBD5E1',
+        '#0284C7',
+        true
+      );
+    }
+
+    // Small Village Well Plaza Landmark in Palm Groves
+    if (reg.id === 'palm_groves') {
+      const wellY = groundHeightAt(reg.x + 2, reg.z + 2, 'br_solo');
+      const well = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.8, 1.1, 10),
+        new THREE.MeshStandardMaterial({ color: '#78716C', roughness: 0.85 })
+      );
+      well.position.set(reg.x + 2, wellY + 0.55, reg.z + 2);
+      worldGroup.add(well);
+      colliders.push({
+        id: 'village_well',
+        minX: reg.x + 2 - 1.7,
+        maxX: reg.x + 2 + 1.7,
+        minY: wellY,
+        maxY: wellY + 1.2,
+        minZ: reg.z + 2 - 1.7,
+        maxZ: reg.z + 2 + 1.7,
+        blocksProjectiles: true,
       });
     }
 
@@ -910,8 +1097,21 @@ function buildSunsetIsland(
     ];
 
     offsets.forEach(([ox, oz], spotIndex) => {
-      const lx = reg.x + ox;
-      const lz = reg.z + oz;
+      let lx = reg.x + ox;
+      let lz = reg.z + oz;
+
+      // Ensure loot never spawns inside a solid wall, container, or rock collider
+      const resolvedLoot = resolveHorizontalCollision(
+        lx,
+        groundHeightAt(lx, lz, 'br_solo'),
+        lz,
+        0.65,
+        1.5,
+        colliders
+      );
+      lx = resolvedLoot.x;
+      lz = resolvedLoot.z;
+
       const ly = getSupportHeightAt(lx, lz, 2.0, 'br_solo', walkableSurfaces);
 
       let type: CollectibleType = 'equipment';

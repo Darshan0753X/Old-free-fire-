@@ -54,6 +54,7 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [squadDrawerOpen, setSquadDrawerOpen] = useState(false);
   const [arenaShopOpen, setArenaShopOpen] = useState(false);
+  const [minimapExpanded, setMinimapExpanded] = useState(false);
   const [viewport, setViewport] = useState<{ w: number; h: number }>({
     w: typeof window !== 'undefined' ? window.innerWidth : 800,
     h: typeof window !== 'undefined' ? window.innerHeight : 450,
@@ -138,14 +139,29 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
     const toMapY = (wz: number) => h / 2 + (wz / worldSpan) * h;
 
     if (hud.mode === 'br_solo' || hud.mode === 'br_squad') {
-      // Island Landmass Circle
-      ctx.fillStyle = '#3F6212';
+      // Sandy Beach Ring + Island Landmass Circle
+      ctx.fillStyle = '#CA8A04';
       ctx.beginPath();
-      ctx.arc(w / 2, h / 2, (185 / worldSpan) * w, 0, Math.PI * 2);
+      ctx.arc(w / 2, h / 2, (188 / worldSpan) * w, 0, Math.PI * 2);
       ctx.fill();
 
+      ctx.fillStyle = '#3F6212';
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, (176 / worldSpan) * w, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Main Island Roads
+      ctx.strokeStyle = 'rgba(161, 98, 7, 0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(toMapX(-140), toMapY(0));
+      ctx.lineTo(toMapX(140), toMapY(0));
+      ctx.moveTo(toMapX(0), toMapY(-140));
+      ctx.lineTo(toMapX(0), toMapY(140));
+      ctx.stroke();
+
       // Named Region Dots
-      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
       for (const reg of SUNSET_ISLAND_REGIONS) {
         const rx = toMapX(reg.x);
         const ry = toMapY(reg.z);
@@ -179,10 +195,17 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
       ctx.stroke();
     }
 
-    // All Vehicles on Minimap
+    // Show Nearby Functional Vehicles on Minimap (within 115m radar range)
     for (const v of hud.vehiclesOnMap) {
-      ctx.fillStyle = v.health > 0 ? '#FACC15' : '#64748B';
-      ctx.fillRect(toMapX(v.x) - 2.5, toMapY(v.z) - 2.5, 5, 5);
+      if (v.disabled) continue;
+      const dToPlayer = Math.hypot(
+        v.x - hud.playerPos.x,
+        v.z - hud.playerPos.z
+      );
+      if (dToPlayer <= 115) {
+        ctx.fillStyle = '#FACC15';
+        ctx.fillRect(toMapX(v.x) - 2.5, toMapY(v.z) - 2.5, 5, 5);
+      }
     }
 
     // Squad Tactical Marker
@@ -620,12 +643,30 @@ export const InGameHUD: React.FC<InGameHUDProps> = ({
           CUSTOMIZABLE & 100% VIEWPORT-CLAMPED HUD CONTROLS
          ===================================================================== */}
 
-      {/* 1. MINIMAP WIDGET */}
+      {/* 1. MINIMAP WIDGET (WITH QUICK EXPAND/COLLAPSE RESIZE BUTTON) */}
       {minimapLayout.visible && (
         <div
-          style={minimapLayout.style}
+          style={{
+            ...minimapLayout.style,
+            width: minimapExpanded
+              ? `${Math.round(parseFloat(String(minimapLayout.style.width)) * 1.32)}px`
+              : minimapLayout.style.width,
+            height: minimapExpanded
+              ? `${Math.round(parseFloat(String(minimapLayout.style.height)) * 1.32)}px`
+              : minimapLayout.style.height,
+          }}
           className="pointer-events-auto fixed z-10 bg-[#0B1320]/85 border border-white/20 rounded-xl p-1 flex flex-col items-center justify-between overflow-hidden"
         >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMinimapExpanded((v) => !v);
+            }}
+            title="Resize Minimap"
+            className="absolute top-1.5 right-1.5 z-10 w-4 h-4 rounded bg-slate-900/90 border border-white/25 text-[9px] font-bold text-[#00E5FF] flex items-center justify-center cursor-pointer"
+          >
+            {minimapExpanded ? '−' : '+'}
+          </button>
           <canvas
             ref={minimapCanvasRef}
             width={104}

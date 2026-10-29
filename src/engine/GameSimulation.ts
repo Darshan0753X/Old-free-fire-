@@ -800,12 +800,33 @@ export class GameSimulationEngine {
           turnRate: 2.7,
           maxHealth: 120,
         },
+        {
+          id: 'veh_depot_rover',
+          type: 'rover',
+          name: 'Patrol Rover 4x4',
+          x: 64,
+          z: -48,
+          yaw: -1.1,
+          maxSpeed: 23,
+          turnRate: 1.95,
+          maxHealth: 240,
+        },
       ];
 
       for (const vs of vehicleSpawns) {
         const vMesh = createVehicleMeshByType(vs.type);
-        const vy = groundHeightAt(vs.x, vs.z, mode);
-        vMesh.root.position.set(vs.x, vy, vs.z);
+        const rawY = groundHeightAt(vs.x, vs.z, mode);
+        // Ensure vehicle never spawns overlapping any building or obstacle collider
+        const safePos = resolveHorizontalCollision(
+          vs.x,
+          rawY,
+          vs.z,
+          2.0,
+          2.2,
+          this.worldData.colliders
+        );
+        const vy = groundHeightAt(safePos.x, safePos.z, mode);
+        vMesh.root.position.set(safePos.x, vy, safePos.z);
         vMesh.root.rotation.y = vs.yaw;
         this.actorsGroup.add(vMesh.root);
         this.vehicles.push({
@@ -813,9 +834,9 @@ export class GameSimulationEngine {
           type: vs.type,
           name: vs.name,
           mesh: vMesh,
-          x: vs.x,
+          x: safePos.x,
           y: vy,
-          z: vs.z,
+          z: safePos.z,
           yaw: vs.yaw,
           speed: 0,
           maxSpeed: vs.maxSpeed,
@@ -2112,6 +2133,14 @@ export class GameSimulationEngine {
     player.y = veh.y;
     player.z = veh.z;
     player.yaw = veh.yaw;
+
+    // Gently align camera behind vehicle heading while driving forward
+    if (Math.abs(veh.speed) > 1.8) {
+      let angleDiff = veh.yaw - this.cameraYaw;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      this.cameraYaw += angleDiff * Math.min(1, dt * 2.6);
+    }
   }
 
   private updatePlayerController(player: ContestantActor, dt: number) {
@@ -2883,6 +2912,31 @@ export class GameSimulationEngine {
         continue;
       }
 
+      // 4. Check Vehicle Hit Detection (Projectiles can damage & disable vehicles)
+      let hitVehicle = false;
+      for (const veh of this.vehicles) {
+        if (veh.disabled || veh.driverId === p.ownerId) continue;
+        const vDist = Math.hypot(nextX - veh.x, nextZ - veh.z);
+        if (vDist < 1.8 && Math.abs(nextY - (veh.y + 0.9)) < 1.2) {
+          veh.health = Math.max(0, veh.health - p.damage);
+          this.spawnImpactBurst(nextX, nextY, nextZ, '#FACC15', 0.25);
+          soundEngine.playSurfaceImpact('wall');
+          if (veh.health <= 0 && !veh.disabled) {
+            veh.disabled = true;
+            this.spawnImpactBurst(veh.x, veh.y + 1.0, veh.z, '#FF6B1A', 0.45);
+            if (this.activeDriverVehicleId === veh.id) {
+              this.toggleVehicleEnterExit();
+            }
+          }
+          hitVehicle = true;
+          break;
+        }
+      }
+      if (hitVehicle) {
+        this.removeProjectileAt(i);
+        continue;
+      }
+
       p.x = nextX;
       p.y = nextY;
       p.z = nextZ;
@@ -3469,6 +3523,17 @@ export class GameSimulationEngine {
           dx += (mdx / mDist) * 2.5;
           dz += (mdz / mDist) * 2.5;
         }
+      }
+    }
+
+    // Vehicle avoidance steering so AI bots never get stuck walking into parked or moving vehicles
+    for (const veh of this.vehicles) {
+      const vdx = bot.x - veh.x;
+      const vdz = bot.z - veh.z;
+      const vDist = Math.hypot(vdx, vdz);
+      if (vDist > 0.05 && vDist < 3.6) {
+        dx += (vdx / vDist) * 4.2;
+        dz += (vdz / vDist) * 4.2;
       }
     }
 

@@ -1,0 +1,106 @@
+Act as a senior 3D browser-game developer specializing in mobile battle royale games.
+
+Upgrade my existing game, CLASSIC DROP, to make combat feel smoother, more responsive, and more satisfying on Android phones.
+
+IMPORTANT RULES:
+
+- Do not rebuild the game from scratch.
+- Do not remove or break existing features, maps, modes, controls, settings, or progression.
+- First inspect the existing code and identify how its combat system works.
+- Implement changes directly in the existing project.
+- Keep everything compatible with the current technology stack.
+- Optimize for mobile browsers and touchscreens.
+
+1. COMBAT FEEDBACK
+
+- Add clear visual feedback when projectiles hit targets.
+- Add subtle hit markers and damage indicators.
+- Display damage numbers briefly without cluttering the screen.
+- Add appropriate impact effects for different surfaces.
+- Make eliminations visually clear but not excessively flashy.
+- Ensure all effects disappear automatically and do not accumulate.
+
+2. WEAPON FEEL
+
+- Improve firing animations and weapon responsiveness.
+- Add appropriate recoil and recovery animations.
+- Add reload animations and clear reload feedback.
+- Make each existing weapon feel distinct through its firing behavior.
+- Improve crossbow projectile visibility and impact feedback.
+- Keep weapon behavior consistent with the existing aiming and projectile system.
+- Never let visual effects change the actual projectile direction or hit detection.
+
+3. CHARACTER ANIMATIONS
+
+Improve existing character animations for:
+
+- Idle and movement.
+- Sprinting and jumping.
+- Crouching, if supported.
+- Aiming and firing.
+- Reloading.
+- Taking damage and elimination.
+
+Use lightweight procedural animations if suitable animation assets are unavailable. Avoid expensive animation systems.
+
+4. SOUND DESIGN
+
+Add optional sound effects for:
+
+- Weapon firing and impacts.
+- Reloading.
+- Footsteps.
+- Jumping and landing.
+- Taking damage.
+- Eliminations.
+- Safe-zone warnings.
+
+Include separate master, effects, and music volume controls. Respect browser audio restrictions and provide a clear way to enable audio after user interaction.
+
+5. ENEMY FEEDBACK
+
+- Make enemy reactions to hits easier to understand.
+- Improve elimination feedback.
+- Ensure AI opponents use the same reliable damage and collision rules as the existing combat system.
+- Prevent duplicate damage events and repeated elimination effects.
+
+6. PERFORMANCE
+
+- Reuse particle systems and temporary effects where possible.
+- Limit active particles and damage indicators.
+- Clean up expired effects and audio resources.
+- Avoid unnecessary object creation during combat.
+- Maintain smooth performance on mid-range Android devices.
+- Respect existing graphics-quality settings.
+
+7. SETTINGS
+
+Add or improve settings for:
+
+- Hit markers: On/Off.
+- Damage numbers: On/Off.
+- Camera shake: Off/Low/High.
+- Combat effects: Low/Medium/High.
+- Sound effects volume.
+- Music volume.
+
+Save preferences locally and ensure every setting actually works.
+
+8. TESTING
+
+Test the following:
+
+- Repeated firing and reloading.
+- Crossbow aiming and projectile direction.
+- Hit detection at different distances.
+- Multiple enemies being hit.
+- Elimination effects triggering only once.
+- Audio settings and browser audio restrictions.
+- Performance during intense combat.
+- Gameplay on a mobile touchscreen.
+
+FINAL REQUIREMENT
+
+Implement the improvements in the existing project, fix any bugs introduced, and verify that all previous features still work.
+
+Do not replace working systems merely to make the code look cleaner. Prioritize reliable gameplay, responsive controls, clear combat feedback, and mobile performance.

@@ -1,0 +1,128 @@
+Act as a senior 3D battle royale game developer. Upgrade my existing game, CLASSIC DROP, with a richer island map, usable vehicles, and more interesting exploration.
+
+IMPORTANT:
+
+- Inspect the existing project before making changes.
+- Do not rebuild the game from scratch.
+- Preserve all working game modes, combat, AI bots, controls, settings, HUD customization, progression, and existing maps.
+- Reuse existing systems and assets wherever possible.
+- Keep the game compatible with its current technology stack and Android mobile browsers.
+- Implement actual functionality, not just visual mockups or placeholder buttons.
+
+1. EXPAND THE ISLAND
+
+Improve the existing island with distinct locations, such as:
+
+- A coastal town.
+- An industrial area.
+- A military-style training compound.
+- A forest and hills.
+- A small village.
+- A warehouse district.
+- Beaches, bridges, roads, and open fields.
+
+Add recognizable landmarks, varied terrain, buildings, cover, and exploration routes.
+
+Use lightweight procedural 3D assets if necessary. Avoid unnecessarily increasing download size.
+
+2. BUILDING EXPLORATION
+
+- Allow players to enter suitable buildings where practical.
+- Add doors and entrances that work correctly.
+- Provide interior spaces in selected buildings.
+- Add stairs and accessible upper floors only where collision and navigation can support them.
+- Prevent players from walking through solid walls and floors.
+- Ensure AI bots can navigate the supported areas.
+
+If full interiors are too expensive, prioritize a smaller number of functional buildings rather than creating many fake interiors.
+
+3. FUNCTIONAL VEHICLES
+
+Add drivable vehicles suitable for the existing game:
+
+- A basic four-wheel vehicle.
+- A faster lightweight vehicle.
+- A motorcycle, if performance permits.
+
+Implement:
+
+- Enter and exit vehicle controls.
+- Acceleration, braking, steering, and reverse.
+- Camera behavior while driving.
+- Collision with buildings and terrain.
+- Vehicle health and destruction or disabling.
+- Appropriate engine audio.
+- Mobile-friendly driving controls.
+
+Show contextual buttons such as DRIVE, EXIT, and BRAKE only when appropriate.
+
+Vehicles must use real movement and collision logic rather than simply sliding a model across the map.
+
+4. VEHICLE GAMEPLAY
+
+- Spawn vehicles at sensible locations.
+- Prevent vehicles from spawning inside buildings or obstacles.
+- Allow players to enter and exit safely.
+- Prevent the player from becoming stuck after exiting.
+- Ensure the camera follows vehicles correctly.
+- Keep vehicles compatible with the shrinking safe zone and existing match rules.
+- Prevent vehicles from breaking AI navigation or causing severe performance drops.
+
+5. EXPLORATION AND LOOT
+
+- Add useful loot locations and recognizable landmarks.
+- Improve the existing loot-spawn system if one exists.
+- Ensure loot does not spawn inside inaccessible geometry.
+- Preserve the existing inventory and pickup mechanics.
+- Add small environmental details that help players navigate without overwhelming the screen.
+
+6. MINIMAP AND NAVIGATION
+
+Improve the existing minimap or add one if missing:
+
+- Show the player's location and facing direction.
+- Show the safe-zone boundary.
+- Show relevant squad members when squad mode is active.
+- Show nearby vehicles only if appropriate.
+- Keep the minimap readable on small screens.
+- Add an option to resize or hide it where practical.
+
+Do not reveal enemy positions automatically unless the existing game rules explicitly support that feature.
+
+7. AI AND WORLD INTERACTION
+
+- Update AI navigation for new terrain and buildings.
+- Allow bots to use cover and avoid obvious obstacles.
+- Prevent bots from getting stuck in walls, vehicles, or inaccessible interiors.
+- Ensure bots continue to fight and behave correctly across existing game modes.
+
+8. MOBILE PERFORMANCE
+
+- Use level-of-detail techniques where practical.
+- Reuse geometry and materials for repeated objects.
+- Use distance-based visibility for distant scenery.
+- Avoid excessive real-time shadows and physics calculations.
+- Provide suitable low, medium, and high graphics options.
+- Keep touch controls usable in both on-foot and vehicle gameplay.
+
+9. TESTING
+
+Verify:
+
+- Every new location is accessible.
+- Buildings have correct collision.
+- Vehicles can be entered, driven, and exited.
+- Vehicle collisions behave correctly.
+- Players cannot become trapped.
+- The minimap updates correctly.
+- AI bots navigate the expanded map.
+- Existing combat, safe-zone, squad, and training systems remain functional.
+- The game remains responsive on Android phones.
+
+FINAL REQUIREMENT
+
+Implement this upgrade directly in the existing project. Fix any regressions before finishing.
+
+If a feature cannot be implemented reliably within the current architecture, implement a smaller working version rather than adding a nonfunctional placeholder.
+
+At completion, provide a concise summary of what changed, which features were tested, and any remaining limitations.

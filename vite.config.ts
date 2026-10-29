@@ -8,9 +8,13 @@ export default defineConfig(() => {
     base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'three', 'lucide-react', 'motion/react'],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
